@@ -1,8 +1,9 @@
 import React, { useEffect, useState } from "react";
 import { useParams, useSearchParams, useNavigate, Link } from "react-router-dom";
 import { apiRequest } from "../utils/api";
-import { ShoppingCart, Wifi, MapPin, Phone, Utensils, Check, Plus, Minus, AlertCircle, Clock, X, ArrowLeft } from "lucide-react";
+import { ShoppingCart, Wifi, MapPin, Phone, Utensils, Check, Plus, Minus, AlertCircle, Clock, X, ArrowLeft, BellRing, Receipt } from "lucide-react";
 import { useAuth } from "../context/AuthContext";
+import { useSocket } from "../context/SocketContext";
 import { LocationPickerMap } from "../components/LocationPickerMap";
 
 interface Variant {
@@ -107,6 +108,12 @@ export const PublicCatalog: React.FC = () => {
   const [submitting, setSubmitting] = useState(false);
   const [isCartMobileOpen, setIsCartMobileOpen] = useState(false);
 
+  // PedidosYa Tracking & Dine-In Table Call states
+  const { socket } = useSocket();
+  const [activeOrder, setActiveOrder] = useState<any>(null);
+  const [waiterCallStatus, setWaiterCallStatus] = useState<string | null>(null);
+  const [waiterCallLoading, setWaiterCallLoading] = useState<boolean>(false);
+
   // Delivery estimation states
   const [deliveryRate, setDeliveryRate] = useState<any>(null);
   const [simulatedDistance, setSimulatedDistance] = useState<number>(2.5); // Default 2.5 km
@@ -203,6 +210,51 @@ export const PublicCatalog: React.FC = () => {
     }
     fetchActiveRate();
   }, [isAuthenticated, orderType]);
+
+  // Listen for real-time order updates for the customer (PedidosYa Live Tracker)
+  useEffect(() => {
+    if (!socket || !restaurant?.id) return;
+    socket.emit("join-restaurant", restaurant.id);
+
+    const handleStatusUpdate = (data: any) => {
+      if (activeOrder && Number(data.orderId) === Number(activeOrder.id)) {
+        setActiveOrder((prev: any) => ({
+          ...prev,
+          status: data.status,
+          deliveryDriverName: data.driverName || prev?.deliveryDriverName,
+        }));
+      }
+    };
+
+    socket.on("order-status-updated", handleStatusUpdate);
+    return () => {
+      socket.off("order-status-updated", handleStatusUpdate);
+    };
+  }, [socket, restaurant?.id, activeOrder?.id]);
+
+  // Handle Calling Waiter or Requesting Bill from Table
+  const handleCallWaiter = async (action: "CALL" | "BILL") => {
+    if (!selectedTable) {
+      alert("Por favor selecciona tu número de mesa primero.");
+      return;
+    }
+    setWaiterCallLoading(true);
+    try {
+      const res = await fetch(`http://localhost:5000/api/restaurants/public/catalog/${slug}/call-waiter`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ tableId: selectedTable, action }),
+      });
+      const data = await res.json();
+      if (!res.ok) throw new Error(data.message || "Error al comunicarse con el mesero");
+      setWaiterCallStatus(action === "BILL" ? "🧾 ¡Cuenta solicitada a caja! Enseguida se acercan a cobrar." : "🛎️ ¡Mesero notificado! Enseguida se acerca a tu mesa.");
+      setTimeout(() => setWaiterCallStatus(null), 8000);
+    } catch (err: any) {
+      alert("Error: " + err.message);
+    } finally {
+      setWaiterCallLoading(false);
+    }
+  };
 
   const addToCart = (variant: Variant, item: MenuItem) => {
     const existingIndex = cart.findIndex((c) => c.variantId === variant.id);
@@ -315,10 +367,8 @@ export const PublicCatalog: React.FC = () => {
         body: JSON.stringify(payload),
       });
 
-      if (!res.ok) {
-        const errorData = await res.json().catch(() => ({}));
-        throw new Error(errorData.message || "Error al enviar el pedido");
-      }
+      const data = await res.json();
+      setActiveOrder(data.order || { ...payload, id: Date.now(), status: "PREPARING" });
 
       setCart([]);
       setOrderSuccess(true);
@@ -635,19 +685,223 @@ export const PublicCatalog: React.FC = () => {
         
         {/* Menu Catalog Section */}
         <main>
-          {orderSuccess ? (
-            <div className="glass-card" style={{ padding: "40px", textAlign: "center", background: "rgba(46, 213, 115, 0.05)", borderColor: "var(--success)" }}>
-              <Check size={48} color="var(--success)" style={{ marginBottom: "15px" }} />
-              <h2 style={{ marginBottom: "10px" }}>¡Pedido Enviado con Éxito!</h2>
-              {orderType !== "DINE_IN" && paymentMethod === "TRANSFER" ? (
-                <p style={{ color: "var(--text-secondary)", marginBottom: "20px" }}>
-                  Tu orden ha sido registrada. El cajero revisará tu comprobante de transferencia bancaria para enviar el pedido a cocina.
-                </p>
-              ) : (
-                <p style={{ color: "var(--text-secondary)", marginBottom: "20px" }}>Tu orden ha sido notificada en tiempo real a la cocina del restaurante.</p>
-              )}
-              <button className="glow-btn" onClick={() => setOrderSuccess(false)}>Hacer otro pedido</button>
+          {/* Bar de Servicio en Mesa (Salón QR) */}
+          {orderType === "DINE_IN" && (
+            <div style={{
+              background: "linear-gradient(135deg, rgba(255, 165, 2, 0.08), rgba(46, 213, 115, 0.08))",
+              border: "1px solid rgba(255, 165, 2, 0.3)",
+              borderRadius: "14px",
+              padding: "16px 20px",
+              marginBottom: "24px",
+              display: "flex",
+              flexWrap: "wrap",
+              justifyContent: "space-between",
+              alignItems: "center",
+              gap: "14px",
+              boxShadow: "0 4px 15px rgba(0,0,0,0.03)"
+            }}>
+              <div style={{ display: "flex", alignItems: "center", gap: "12px" }}>
+                <div style={{ width: "42px", height: "42px", borderRadius: "10px", background: "#ffa502", display: "flex", alignItems: "center", justifyContent: "center", color: "#fff", fontSize: "1.4rem" }}>
+                  🪑
+                </div>
+                <div>
+                  <div style={{ fontWeight: "800", fontSize: "1.05rem", color: "var(--text-primary)" }}>
+                    {selectedTable 
+                      ? `Mesa ${diningAreas.flatMap(a => a.tables).find(t => String(t.id) === String(selectedTable))?.number || selectedTable} • En Servicio`
+                      : "Servicio en Mesa (Autoservicio QR)"}
+                  </div>
+                  <div style={{ fontSize: "0.85rem", color: "var(--text-secondary)" }}>
+                    {selectedTable ? "Tus comandas van directo a la pantalla de cocina" : "Elige tu mesa en el carrito para ordenar"}
+                  </div>
+                </div>
+              </div>
+
+              <div style={{ display: "flex", gap: "10px", flexWrap: "wrap" }}>
+                <button
+                  type="button"
+                  onClick={() => handleCallWaiter("CALL")}
+                  disabled={waiterCallLoading || !selectedTable}
+                  style={{
+                    background: "#ffa502",
+                    color: "#fff",
+                    border: "none",
+                    padding: "9px 16px",
+                    borderRadius: "10px",
+                    fontWeight: "700",
+                    fontSize: "0.88rem",
+                    cursor: selectedTable ? "pointer" : "not-allowed",
+                    display: "flex",
+                    alignItems: "center",
+                    gap: "6px",
+                    boxShadow: "0 2px 8px rgba(255,165,2,0.3)",
+                    opacity: selectedTable ? 1 : 0.6
+                  }}
+                >
+                  <BellRing size={16} />
+                  <span>{waiterCallLoading ? "Avisando..." : "Llamar Mesero"}</span>
+                </button>
+
+                <button
+                  type="button"
+                  onClick={() => handleCallWaiter("BILL")}
+                  disabled={waiterCallLoading || !selectedTable}
+                  style={{
+                    background: "#2ed573",
+                    color: "#fff",
+                    border: "none",
+                    padding: "9px 16px",
+                    borderRadius: "10px",
+                    fontWeight: "700",
+                    fontSize: "0.88rem",
+                    cursor: selectedTable ? "pointer" : "not-allowed",
+                    display: "flex",
+                    alignItems: "center",
+                    gap: "6px",
+                    boxShadow: "0 2px 8px rgba(46,213,115,0.3)",
+                    opacity: selectedTable ? 1 : 0.6
+                  }}
+                >
+                  <Receipt size={16} />
+                  <span>{waiterCallLoading ? "Avisando..." : "Pedir Cuenta"}</span>
+                </button>
+              </div>
             </div>
+          )}
+
+          {/* Banner de confirmación de llamado a mesero */}
+          {waiterCallStatus && (
+            <div style={{
+              background: "rgba(46, 213, 115, 0.15)",
+              border: "1px solid #2ed573",
+              color: "#2ed573",
+              padding: "14px 20px",
+              borderRadius: "12px",
+              marginBottom: "20px",
+              fontWeight: "700",
+              display: "flex",
+              alignItems: "center",
+              gap: "10px"
+            }}>
+              <span>{waiterCallStatus}</span>
+            </div>
+          )}
+
+          {orderSuccess ? (
+            activeOrder?.type === "DELIVERY" ? (
+              /* LIVE TRACKER ESTILO PEDIDOSYA */
+              <div className="glass-card" style={{ padding: "30px", background: "var(--card-bg, #ffffff)", borderColor: "var(--border-light)", borderRadius: "18px", boxShadow: "0 8px 30px rgba(0,0,0,0.06)" }}>
+                <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", borderBottom: "1px solid var(--border-light)", paddingBottom: "16px", marginBottom: "20px" }}>
+                  <div>
+                    <span style={{ fontSize: "0.8rem", fontWeight: "800", color: "var(--accent-primary)", textTransform: "uppercase", letterSpacing: "1px" }}>
+                      🛵 Pedido a Domicilio en Curso
+                    </span>
+                    <h2 style={{ margin: "4px 0 0 0", fontSize: "1.5rem" }}>
+                      Orden #{activeOrder?.id || "---"}
+                    </h2>
+                  </div>
+                  <div style={{
+                    padding: "6px 14px",
+                    borderRadius: "20px",
+                    fontWeight: "800",
+                    fontSize: "0.85rem",
+                    backgroundColor: activeOrder?.status === "DELIVERED" ? "rgba(46, 213, 115, 0.15)" : activeOrder?.status === "DELIVERING" ? "rgba(30, 144, 255, 0.15)" : "rgba(255, 165, 2, 0.15)",
+                    color: activeOrder?.status === "DELIVERED" ? "#2ed573" : activeOrder?.status === "DELIVERING" ? "#1e90ff" : "#ffa502"
+                  }}>
+                    {activeOrder?.status === "DELIVERED" ? "✓ ENTREGADO" : activeOrder?.status === "DELIVERING" ? "EN CAMINO" : activeOrder?.status === "READY" ? "EMPACADO" : "EN PREPARACIÓN"}
+                  </div>
+                </div>
+
+                {/* PIN DE ENTREGA DESTACADO (PEDIDOSYA STYLE) */}
+                {activeOrder?.deliveryPin && activeOrder?.status !== "DELIVERED" && (
+                  <div style={{
+                    background: "linear-gradient(135deg, rgba(46, 213, 115, 0.12), rgba(30, 144, 255, 0.12))",
+                    border: "2px dashed #2ed573",
+                    borderRadius: "14px",
+                    padding: "20px",
+                    margin: "20px 0",
+                    textAlign: "center"
+                  }}>
+                    <div style={{ fontSize: "0.85rem", fontWeight: "800", color: "#2ed573", letterSpacing: "1.5px", textTransform: "uppercase" }}>
+                      🔑 CÓDIGO PIN DE ENTREGA (PEDIDOSYA STYLE)
+                    </div>
+                    <div style={{ fontSize: "3.2rem", fontWeight: "900", letterSpacing: "12px", color: "#2ed573", margin: "10px 0", fontFamily: "monospace" }}>
+                      {activeOrder.deliveryPin}
+                    </div>
+                    <p style={{ margin: 0, fontSize: "0.92rem", color: "var(--text-secondary)" }}>
+                      Dicta este código de 4 dígitos al repartidor cuando llegue a tu puerta para validar y recibir tu comida.
+                    </p>
+                  </div>
+                )}
+
+                {/* STEPPER DE PROGRESO EN VIVO */}
+                <div style={{ display: "grid", gridTemplateColumns: "repeat(4, 1fr)", gap: "8px", margin: "28px 0", textAlign: "center" }}>
+                  {[
+                    { label: "1. Confirmado", icon: "✓", active: true },
+                    { label: "2. En Cocina", icon: "🔥", active: activeOrder?.status !== "PENDING" },
+                    { label: "3. En Camino", icon: "🛵", active: activeOrder?.status === "DELIVERING" || activeOrder?.status === "DELIVERED" },
+                    { label: "4. Entregado", icon: "🎉", active: activeOrder?.status === "DELIVERED" }
+                  ].map((step, idx) => (
+                    <div key={idx} style={{ display: "flex", flexDirection: "column", alignItems: "center", gap: "6px" }}>
+                      <div style={{
+                        width: "36px",
+                        height: "36px",
+                        borderRadius: "50%",
+                        background: step.active ? "#2ed573" : "#e2e8f0",
+                        color: step.active ? "#fff" : "#a4b0be",
+                        display: "flex",
+                        alignItems: "center",
+                        justifyContent: "center",
+                        fontWeight: "bold",
+                        fontSize: "0.9rem",
+                        boxShadow: step.active ? "0 3px 10px rgba(46,213,115,0.3)" : "none"
+                      }}>
+                        {step.icon}
+                      </div>
+                      <span style={{ fontSize: "0.78rem", fontWeight: step.active ? "700" : "500", color: step.active ? "var(--text-primary)" : "var(--text-secondary)" }}>
+                        {step.label}
+                      </span>
+                    </div>
+                  ))}
+                </div>
+
+                {/* DETALLES DE ENTREGA */}
+                <div style={{ background: "rgba(0,0,0,0.02)", borderRadius: "12px", padding: "16px", margin: "20px 0", fontSize: "0.9rem", display: "flex", flexDirection: "column", gap: "8px" }}>
+                  <div><strong>Destino:</strong> {activeOrder?.deliveryAddress || deliveryAddress || "Dirección indicada"}</div>
+                  <div><strong>Total:</strong> ${Number(activeOrder?.total || 0).toFixed(2)} ({activeOrder?.paymentMethodString === "CASH" ? "Efectivo contraentrega" : "Pagado digitalmente"})</div>
+                  <div><strong>Repartidor:</strong> {activeOrder?.deliveryDriverName || "Buscando repartidor cercano..."}</div>
+                </div>
+
+                <div style={{ display: "flex", gap: "12px", justifyContent: "center" }}>
+                  <button className="secondary-btn" onClick={() => setOrderSuccess(false)} style={{ padding: "12px 24px" }}>
+                    Hacer otro pedido
+                  </button>
+                  <button className="glow-btn" onClick={() => window.location.reload()} style={{ padding: "12px 24px" }}>
+                    Actualizar estado
+                  </button>
+                </div>
+              </div>
+            ) : (
+              /* CONFIRMACIÓN EN MESA (DINE-IN QR) */
+              <div className="glass-card" style={{ padding: "40px", textAlign: "center", background: "rgba(46, 213, 115, 0.05)", borderColor: "var(--success)" }}>
+                <Check size={48} color="var(--success)" style={{ marginBottom: "15px" }} />
+                <h2 style={{ marginBottom: "10px" }}>¡Comanda Enviada a Cocina!</h2>
+                <p style={{ color: "var(--text-secondary)", marginBottom: "25px", fontSize: "1rem" }}>
+                  Los platos seleccionados para tu <strong>Mesa</strong> ya se encuentran en la pantalla del cocinero.
+                </p>
+
+                <div style={{ display: "flex", gap: "12px", justifyContent: "center", flexWrap: "wrap", marginBottom: "20px" }}>
+                  <button className="secondary-btn" onClick={() => handleCallWaiter("CALL")} style={{ padding: "10px 20px" }}>
+                    🛎️ Llamar al Mesero
+                  </button>
+                  <button className="secondary-btn" onClick={() => handleCallWaiter("BILL")} style={{ padding: "10px 20px" }}>
+                    🧾 Solicitar Cuenta
+                  </button>
+                  <button className="glow-btn" onClick={() => setOrderSuccess(false)} style={{ padding: "10px 20px" }}>
+                    🍽️ Pedir más platos
+                  </button>
+                </div>
+              </div>
+            )
           ) : (
             <div style={{ display: "flex", flexDirection: "column", gap: "40px" }}>
               {categories.map((cat) => (

@@ -6,6 +6,7 @@ import {
   getPublicRestaurantCatalog,
   getPublicRestaurantList,
   createPublicOrder,
+  callWaiterFromTable,
 } from "./restaurants.controller";
 import { authMiddleware } from "../../middlewares/auth";
 import { authorize } from "../../middlewares/rbac";
@@ -17,6 +18,7 @@ const router = Router();
 router.get("/public/list", getPublicRestaurantList);
 router.get("/public/catalog/:slug", getPublicRestaurantCatalog);
 router.post("/public/catalog/:slug/order", createPublicOrder);
+router.post("/public/catalog/:slug/call-waiter", callWaiterFromTable);
 
 // Private routes
 router.get("/", authMiddleware, authorize([Role.SUPER_ADMIN]), getAllRestaurants);

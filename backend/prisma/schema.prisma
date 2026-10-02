@@ -278,6 +278,7 @@ model Order {
   deliveryDriverName  String? // Legacy / optional
   shippingCost        Float       @default(0.0)
   deliveryObservation String?
+  deliveryPin         String?     // Código PIN de 4 dígitos para entrega segura (tipo PedidosYa)
   deliveryDriverId    Int?
   deliveryDriver      User?       @relation("DriverOrders", fields: [deliveryDriverId], references: [id])
   paymentMethodString String?

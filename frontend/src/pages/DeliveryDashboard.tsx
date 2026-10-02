@@ -28,6 +28,7 @@ interface Order {
   status: string;
   deliveryObservation: string | null;
   paymentMethodString?: string;
+  requiresPin?: boolean;
   financialBreakdown?: {
     foodSubtotal: number;
     commissionPct: number;
@@ -200,14 +201,29 @@ export const DeliveryDashboard: React.FC = () => {
     }
   };
 
-  const handleCompleteOrder = async (orderId: number) => {
-    if (!confirm("¿Confirmas que has entregado este pedido al cliente?")) return;
+  const handleCompleteOrder = async (orderId: number, requiresPin?: boolean) => {
+    let pinToSend: string | undefined = undefined;
+
+    if (requiresPin) {
+      const enteredPin = prompt("🔒 INGRESE EL PIN DE 4 DÍGITOS DEL CLIENTE (PEDIDOSYA STYLE):\n(El cliente tiene este código en su pantalla de seguimiento para validar la entrega)");
+      if (enteredPin === null) return; // cancelado
+      if (!enteredPin.trim()) {
+        alert("Debes ingresar el PIN de 4 dígitos proporcionado por el cliente.");
+        return;
+      }
+      pinToSend = enteredPin.trim();
+    } else {
+      if (!confirm("¿Confirmas que has entregado este pedido al cliente?")) return;
+    }
 
     setActionLoading(orderId);
     try {
-      const res = await apiRequest(`/delivery/complete/${orderId}`, { method: "POST" });
+      const res = await apiRequest(`/delivery/complete/${orderId}`, {
+        method: "POST",
+        body: JSON.stringify({ pin: pinToSend }),
+      });
       if (res.success) {
-        alert("¡Entrega marcada como completada!");
+        alert("🎉 ¡Entrega verificada y completada con éxito!");
         loadData();
       }
     } catch (err: any) {
@@ -773,7 +789,7 @@ export const DeliveryDashboard: React.FC = () => {
                               Añadir Observación
                             </button>
                             <button
-                              onClick={() => handleCompleteOrder(order.id)}
+                              onClick={() => handleCompleteOrder(order.id, order.requiresPin)}
                               disabled={actionLoading === order.id}
                               style={{
                                 backgroundColor: "var(--success)",
@@ -790,7 +806,7 @@ export const DeliveryDashboard: React.FC = () => {
                               }}
                             >
                               <CheckCircle size={16} />
-                              Completar y Entregar Pedido
+                              {order.requiresPin ? "🔒 Completar con PIN del Cliente" : "Completar y Entregar Pedido"}
                             </button>
                           </div>
                         )}

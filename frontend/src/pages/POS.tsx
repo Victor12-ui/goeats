@@ -17,11 +17,8 @@ import {
   X,
   Store,
   Bell,
-  BellRing,
   Volume2,
   VolumeX,
-  Clock,
-  Check,
   LayoutGrid
 } from "lucide-react";
 
@@ -100,7 +97,6 @@ export const POS: React.FC = () => {
   const { user } = useAuth();
   const { socket } = useSocket();
   const isLoadingOrderRef = useRef(false);
-  const isSyncingRef = useRef(false);
   const [searchParams, setSearchParams] = useSearchParams();
   const viewParam = searchParams.get("view") || "menu";
 
@@ -167,16 +163,15 @@ export const POS: React.FC = () => {
   // Kitchen Notification & Sound State for Waiters
   const [notifications, setNotifications] = useState<WaiterNotification[]>([]);
   const [unreadNotifsCount, setUnreadNotifsCount] = useState(0);
-  const [activeToast, setActiveToast] = useState<WaiterNotification | null>(null);
   const [showNotifDrawer, setShowNotifDrawer] = useState(false);
   const [soundEnabled, setSoundEnabled] = useState(true);
+  const [incomingDeliveryOrder, setIncomingDeliveryOrder] = useState<any>(null);
   const [tableReadinessMap, setTableReadinessMap] = useState<Record<number, {
     status: "ALMOST_READY" | "ALL_READY" | "CALL_WAITER";
     readyItems: number;
     totalItems: number;
     timestamp: string;
   }>>({});
-  const toastTimerRef = useRef<any>(null);
 
   const playKitchenNotificationSound = (type: "ALMOST_READY" | "ALL_READY" | "CALL_WAITER") => {
     if (!soundEnabled) return;
@@ -237,7 +232,6 @@ export const POS: React.FC = () => {
       const tbl = area.tables?.find(t => t.id === tableId);
       if (tbl) {
         handleSelectTable(tbl);
-        setActiveToast(null);
         return;
       }
     }
@@ -482,18 +476,27 @@ export const POS: React.FC = () => {
         }));
       }
 
+      playKitchenNotificationSound(notif.type);
       apiRequest("/tables/dining-areas").then((res) => setDiningAreas(res.diningAreas || []));
     };
 
+    const handleNewOrder = (order: any) => {
+      handleTableChange();
+      if (order && (order.type === "DELIVERY" || order.type === "TAKEOUT")) {
+        setIncomingDeliveryOrder(order);
+        playKitchenNotificationSound("CALL_WAITER");
+      }
+    };
+
     socket.on("order-status-updated", handleTableChange);
-    socket.on("new-order", handleTableChange);
+    socket.on("new-order", handleNewOrder);
     socket.on("order-cancelled", handleTableChange);
     socket.on("cash-session-changed", handleCashSessionChange);
     socket.on("waiter-order-notification", handleWaiterNotification);
 
     return () => {
       socket.off("order-status-updated", handleTableChange);
-      socket.off("new-order", handleTableChange);
+      socket.off("new-order", handleNewOrder);
       socket.off("order-cancelled", handleTableChange);
       socket.off("cash-session-changed", handleCashSessionChange);
       socket.off("waiter-order-notification", handleWaiterNotification);
@@ -2710,6 +2713,121 @@ export const POS: React.FC = () => {
             </div>
           )}
         </>
+      )}
+
+      {/* Modal de Alerta de Nuevo Pedido de Delivery (Estilo PedidosYa) */}
+      {incomingDeliveryOrder && (
+        <div style={{
+          position: "fixed",
+          top: 0,
+          left: 0,
+          right: 0,
+          bottom: 0,
+          background: "rgba(0, 0, 0, 0.75)",
+          backdropFilter: "blur(4px)",
+          zIndex: 9999,
+          display: "flex",
+          alignItems: "center",
+          justifyContent: "center",
+          padding: "20px"
+        }}>
+          <div className="glass-card" style={{
+            background: "#ffffff",
+            maxWidth: "480px",
+            width: "100%",
+            borderRadius: "20px",
+            padding: "28px",
+            boxShadow: "0 15px 50px rgba(0,0,0,0.3)",
+            textAlign: "center",
+            border: "2px solid #ff4757"
+          }}>
+            <div style={{
+              width: "68px",
+              height: "68px",
+              borderRadius: "50%",
+              background: "rgba(255, 71, 87, 0.15)",
+              color: "#ff4757",
+              display: "flex",
+              alignItems: "center",
+              justifyContent: "center",
+              margin: "0 auto 16px auto",
+              fontSize: "2.2rem"
+            }}>
+              🛵
+            </div>
+
+            <span style={{
+              display: "inline-block",
+              background: "#ff4757",
+              color: "#fff",
+              padding: "4px 12px",
+              borderRadius: "20px",
+              fontSize: "0.8rem",
+              fontWeight: "800",
+              letterSpacing: "1px",
+              marginBottom: "8px"
+            }}>
+              ¡ALERTA PEDIDOSYA!
+            </span>
+
+            <h2 style={{ margin: "4px 0 8px 0", color: "#2f3542", fontSize: "1.6rem" }}>
+              Nuevo Pedido de Delivery
+            </h2>
+            <p style={{ margin: "0 0 20px 0", color: "#747d8c", fontSize: "1rem" }}>
+              Orden #{incomingDeliveryOrder.id} • Cliente: <strong>{incomingDeliveryOrder.customerName}</strong>
+            </p>
+
+            <div style={{
+              background: "#f8f9fa",
+              border: "1px solid #e9ecef",
+              borderRadius: "14px",
+              padding: "16px",
+              textAlign: "left",
+              marginBottom: "24px",
+              fontSize: "0.95rem",
+              display: "flex",
+              flexDirection: "column",
+              gap: "8px"
+            }}>
+              <div><strong>📍 Entrega:</strong> {incomingDeliveryOrder.deliveryAddress || "A domicilio"}</div>
+              <div><strong>📞 Teléfono:</strong> {incomingDeliveryOrder.deliveryPhone || "No especificado"}</div>
+              <div><strong>💰 Total:</strong> ${Number(incomingDeliveryOrder.total || 0).toFixed(2)}</div>
+              <div><strong>🍽️ Platos:</strong> {incomingDeliveryOrder.items?.length || 1} producto(s)</div>
+            </div>
+
+            <div style={{ display: "flex", gap: "12px" }}>
+              <button
+                type="button"
+                className="secondary-btn"
+                onClick={() => setIncomingDeliveryOrder(null)}
+                style={{ flex: 1, padding: "12px", borderRadius: "10px", fontWeight: "600" }}
+              >
+                Cerrar Aviso
+              </button>
+              <button
+                type="button"
+                className="glow-btn"
+                onClick={() => {
+                  handleSelectExternalOrder(incomingDeliveryOrder);
+                  setIncomingDeliveryOrder(null);
+                }}
+                style={{
+                  flex: 2,
+                  padding: "12px",
+                  borderRadius: "10px",
+                  background: "#2ed573",
+                  color: "#fff",
+                  fontWeight: "800",
+                  fontSize: "1rem",
+                  border: "none",
+                  cursor: "pointer"
+                }}
+              >
+                Aceptar Pedido ➔
+              </button>
+            </div>
+          </div>
+        </div>
       )}
     </div>
   );

@@ -358,6 +358,8 @@ export async function createPublicOrder(req: Request, res: Response, next: NextF
 
       // Create the order
       const costEnvio = (typeEnum === OrderType.DELIVERY && !isPlusClient) ? parseFloat(shippingCost || 0) : 0;
+      const generatedPin = typeEnum === OrderType.DELIVERY ? Math.floor(1000 + Math.random() * 9000).toString() : null;
+
       const newOrder = await tx.order.create({
         data: {
           type: typeEnum,
@@ -373,6 +375,7 @@ export async function createPublicOrder(req: Request, res: Response, next: NextF
           deliveryPhone: typeEnum === OrderType.DELIVERY ? deliveryPhone : null,
           deliveryLat: (typeEnum === OrderType.DELIVERY && deliveryLat) ? parseFloat(deliveryLat) : null,
           deliveryLng: (typeEnum === OrderType.DELIVERY && deliveryLng) ? parseFloat(deliveryLng) : null,
+          deliveryPin: generatedPin,
           restaurantId: restaurant.id,
           paymentMethodString: paymentMethod || "CASH",
           paymentReceipt: paymentReceipt || null,
@@ -415,3 +418,62 @@ export async function createPublicOrder(req: Request, res: Response, next: NextF
     return res.status(400).json({ success: false, message: error.message || "Failed to create order" });
   }
 }
+
+export async function callWaiterFromTable(req: Request, res: Response, next: NextFunction) {
+  try {
+    const { slug } = req.params;
+    const { tableId, action } = req.body; // action: "CALL" | "BILL"
+
+    const restaurant = await prisma.restaurant.findUnique({
+      where: { slug: slug.toLowerCase().trim(), isActive: true },
+    });
+
+    if (!restaurant) {
+      return res.status(404).json({ success: false, message: "Restaurante no encontrado" });
+    }
+
+    const parsedTableId = parseInt(tableId, 10);
+    if (isNaN(parsedTableId)) {
+      return res.status(400).json({ success: false, message: "ID de mesa inválido" });
+    }
+
+    const table = await prisma.table.findFirst({
+      where: { id: parsedTableId, diningArea: { restaurantId: restaurant.id } },
+      include: { diningArea: true },
+    });
+
+    if (!table) {
+      return res.status(404).json({ success: false, message: "Mesa no encontrada en este restaurante" });
+    }
+
+    const isBill = action === "BILL";
+    const notifType = isBill ? "BILL" : "CALL_WAITER";
+    const title = isBill ? "🧾 ¡Solicitud de Cuenta!" : "🛎️ ¡Llamado de Mesa!";
+    const message = isBill
+      ? `La Mesa ${table.number} (${table.diningArea.name}) está solicitando la cuenta para pagar.`
+      : `La Mesa ${table.number} (${table.diningArea.name}) solicita la atención de un mesero.`;
+
+    const io = req.app.get("io");
+    if (io) {
+      io.to(`restaurant-${restaurant.id}`).emit("waiter-order-notification", {
+        type: notifType,
+        tableId: table.id,
+        tableNumber: String(table.number),
+        tableName: `Mesa ${table.number}`,
+        title,
+        message,
+        restaurantId: restaurant.id,
+        timestamp: new Date().toISOString(),
+      });
+      console.log(`[Socket] Emitted ${notifType} for restaurant-${restaurant.id}, table ${table.number}`);
+    }
+
+    return res.status(200).json({
+      success: true,
+      message: isBill ? "Solicitud de cuenta enviada a caja" : "Llamado enviado al personal de servicio",
+    });
+  } catch (error) {
+    next(error);
+  }
+}
+

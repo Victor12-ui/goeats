@@ -71,8 +71,11 @@ export async function getAvailableOrders(req: Request, res: Response, next: Next
       const bonus = rate.plusDriverBonus || 0.10;
       const driverEarnings = parseFloat(((order.shippingCost || 0) + bonus).toFixed(2));
 
+      const { deliveryPin, ...safeOrder } = order as any;
+
       return {
-        ...order,
+        ...safeOrder,
+        requiresPin: !!deliveryPin,
         financialBreakdown: {
           foodSubtotal,
           commissionPct,
@@ -222,6 +225,8 @@ export async function completeDelivery(req: Request, res: Response, next: NextFu
       return res.status(400).json({ success: false, message: "Invalid parameters" });
     }
 
+    const { pin } = req.body;
+
     const order = await prisma.order.findFirst({
       where: { id: orderId, deliveryDriverId: userId, status: OrderStatus.DELIVERING },
       include: {
@@ -232,6 +237,16 @@ export async function completeDelivery(req: Request, res: Response, next: NextFu
 
     if (!order) {
       return res.status(404).json({ success: false, message: "Pedido activo no encontrado" });
+    }
+
+    // Validación de PIN de entrega estilo PedidosYa / Uber Eats
+    if (order.deliveryPin) {
+      if (!pin || pin.toString().trim() !== order.deliveryPin.trim()) {
+        return res.status(400).json({
+          success: false,
+          message: "PIN de entrega incorrecto. Solicita al cliente su código de 4 dígitos para confirmar la entrega.",
+        });
+      }
     }
 
     const isPlusOrder = order.customer?.isPlus === true;
@@ -473,8 +488,11 @@ export async function getDriverActiveOrders(req: Request, res: Response, next: N
       const bonus = rate.plusDriverBonus || 0.10;
       const driverEarnings = order.driverEarnings ?? parseFloat(((order.shippingCost || 0) + bonus).toFixed(2));
 
+      const { deliveryPin, ...safeOrder } = order as any;
+
       return {
-        ...order,
+        ...safeOrder,
+        requiresPin: !!deliveryPin,
         financialBreakdown: {
           foodSubtotal,
           commissionPct,

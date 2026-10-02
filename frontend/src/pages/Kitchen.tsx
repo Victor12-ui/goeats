@@ -1,7 +1,7 @@
 import React, { useEffect, useState } from "react";
 import { useSocket } from "../context/SocketContext";
 import { apiRequest } from "../utils/api";
-import { Play, CheckCircle, Loader2, Sparkles, ChefHat, BellRing, CheckCircle2, Clock } from "lucide-react";
+import { Play, CheckCircle, Loader2, Sparkles, ChefHat, BellRing, CheckCircle2 } from "lucide-react";
 
 interface OrderItem {
   id: number;
@@ -41,7 +41,7 @@ export const Kitchen: React.FC = () => {
   const [callingWaiterOrderId, setCallingWaiterOrderId] = useState<number | null>(null);
   const [calledSuccessMap, setCalledSuccessMap] = useState<Record<number, boolean>>({});
 
-  const handleCallWaiter = async (orderId: number, tableName: string) => {
+  const handleCallWaiter = async (orderId: number, _tableName?: string) => {
     try {
       setCallingWaiterOrderId(orderId);
       await apiRequest(`/kitchen/orders/${orderId}/call-waiter`, {

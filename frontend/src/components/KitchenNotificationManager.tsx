@@ -3,7 +3,7 @@ import { createPortal } from "react-dom";
 import { useSocket } from "../context/SocketContext";
 import { useAuth } from "../context/AuthContext";
 import { useNavigate } from "react-router-dom";
-import { Bell, BellRing, X, Clock, Volume2, VolumeX, CheckCircle2, ShieldAlert, Sparkles } from "lucide-react";
+import { Bell, BellRing, X, Clock, Volume2, VolumeX, CheckCircle2, Sparkles } from "lucide-react";
 
 export interface KitchenNotification {
   id: string;
