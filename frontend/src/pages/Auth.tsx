@@ -469,13 +469,15 @@ export const Auth: React.FC = () => {
 
           <div style={{ textAlign: "center", marginBottom: "25px" }}>
             <h2 style={{ fontSize: "24px", color: "var(--text-primary)", fontWeight: "800", margin: "0 0 5px 0" }}>
-              {isLogin ? "Iniciar Sesión" : selectedRole === "restaurant" ? "Registrar Restaurante" : "Crear Cuenta"}
+              {isLogin ? "Iniciar Sesión" : selectedRole === "restaurant" ? "Registrar Restaurante" : selectedRole === "driver" ? "Registrar Conductor" : "Crear Cuenta"}
             </h2>
             <p style={{ color: "var(--text-secondary)", fontSize: "13px", margin: 0 }}>
               {selectedRole === "restaurant" && isLogin
                 ? "Dueños, Cajeros, Cocina y Meseros"
                 : selectedRole === "superadmin"
                 ? "Administrador Global de la Plataforma"
+                : selectedRole === "customer" && !isLogin
+                ? "Regístrate al instante con tu cuenta de Google, Apple o Facebook"
                 : "Ingresa tus credenciales para continuar"}
             </p>
           </div>
@@ -692,77 +694,34 @@ export const Auth: React.FC = () => {
                 </button>
               </div>
 
-              {/* Minimalist modern divider */}
-              <div style={{
-                display: "flex",
-                alignItems: "center",
-                margin: "24px 0 16px",
-                color: "#94a3b8",
-                fontSize: "12px",
-                fontWeight: "500"
-              }}>
-                <div style={{ flex: 1, height: "1px", backgroundColor: "#e2e8f0" }} />
-                <span style={{ padding: "0 14px", color: "#64748b" }}>o continúa con credenciales</span>
-                <div style={{ flex: 1, height: "1px", backgroundColor: "#e2e8f0" }} />
-              </div>
+              {/* Minimalist modern divider (only shown when login form or non-customer forms follow) */}
+              {(isLogin || selectedRole !== "customer") && (
+                <div style={{
+                  display: "flex",
+                  alignItems: "center",
+                  margin: "24px 0 16px",
+                  color: "#94a3b8",
+                  fontSize: "12px",
+                  fontWeight: "500"
+                }}>
+                  <div style={{ flex: 1, height: "1px", backgroundColor: "#e2e8f0" }} />
+                  <span style={{ padding: "0 14px", color: "#64748b" }}>o continúa con credenciales</span>
+                  <div style={{ flex: 1, height: "1px", backgroundColor: "#e2e8f0" }} />
+                </div>
+              )}
             </div>
           )}
 
-          <form onSubmit={handleSubmit}>
-            {!isLogin && (
-              <>
-                {/* Name */}
-                <div className="input-group">
-                  <label>{selectedRole === "restaurant" ? "Nombre del Dueño" : "Nombre Completo"}</label>
-                  <div style={{ position: "relative" }}>
-                    <UserIcon size={18} style={{
-                      position: "absolute",
-                      left: "14px",
-                      top: "50%",
-                      transform: "translateY(-50%)",
-                      color: "var(--text-muted)"
-                    }} />
-                    <input
-                      type="text"
-                      className="input-field"
-                      style={{ paddingLeft: "45px" }}
-                      placeholder="Ej. Juan Pérez"
-                      value={name}
-                      onChange={(e) => setName(e.target.value)}
-                      required
-                    />
-                  </div>
-                </div>
-
-                {/* Email */}
-                <div className="input-group">
-                  <label>Correo Electrónico</label>
-                  <div style={{ position: "relative" }}>
-                    <Mail size={18} style={{
-                      position: "absolute",
-                      left: "14px",
-                      top: "50%",
-                      transform: "translateY(-50%)",
-                      color: "var(--text-muted)"
-                    }} />
-                    <input
-                      type="email"
-                      className="input-field"
-                      style={{ paddingLeft: "45px" }}
-                      placeholder="correo@ejemplo.com"
-                      value={email}
-                      onChange={(e) => setEmail(e.target.value)}
-                      required
-                    />
-                  </div>
-                </div>
-
-                {/* Cedula (Customer / Driver) */}
-                {selectedRole !== "restaurant" && (
+          {/* Hide form when customer is registering, as customer registration is exclusively via Social Auth (Google, Apple, Facebook) */}
+          {!(selectedRole === "customer" && !isLogin) ? (
+            <form onSubmit={handleSubmit}>
+              {!isLogin && (
+                <>
+                  {/* Name */}
                   <div className="input-group">
-                    <label>Cédula Ecuatoriana (10 dígitos)</label>
+                    <label>{selectedRole === "restaurant" ? "Nombre del Dueño" : "Nombre Completo"}</label>
                     <div style={{ position: "relative" }}>
-                      <Shield size={18} style={{
+                      <UserIcon size={18} style={{
                         position: "absolute",
                         left: "14px",
                         top: "50%",
@@ -773,24 +732,43 @@ export const Auth: React.FC = () => {
                         type="text"
                         className="input-field"
                         style={{ paddingLeft: "45px" }}
-                        placeholder="Ej. 1712345678"
-                        value={cedula}
-                        maxLength={10}
-                        onChange={(e) => setCedula(e.target.value.replace(/\D/g, ""))}
+                        placeholder="Ej. Juan Pérez"
+                        value={name}
+                        onChange={(e) => setName(e.target.value)}
                         required
                       />
                     </div>
                   </div>
-                )}
 
-                {/* Restaurant Owner specific fields */}
-                {selectedRole === "restaurant" && (
-                  <>
-                    {/* Restaurant Name */}
+                  {/* Email */}
+                  <div className="input-group">
+                    <label>Correo Electrónico</label>
+                    <div style={{ position: "relative" }}>
+                      <Mail size={18} style={{
+                        position: "absolute",
+                        left: "14px",
+                        top: "50%",
+                        transform: "translateY(-50%)",
+                        color: "var(--text-muted)"
+                      }} />
+                      <input
+                        type="email"
+                        className="input-field"
+                        style={{ paddingLeft: "45px" }}
+                        placeholder="correo@ejemplo.com"
+                        value={email}
+                        onChange={(e) => setEmail(e.target.value)}
+                        required
+                      />
+                    </div>
+                  </div>
+
+                  {/* Cedula (Driver only) */}
+                  {selectedRole === "driver" && (
                     <div className="input-group">
-                      <label>Nombre del Restaurante</label>
+                      <label>Cédula Ecuatoriana (10 dígitos)</label>
                       <div style={{ position: "relative" }}>
-                        <Store size={18} style={{
+                        <Shield size={18} style={{
                           position: "absolute",
                           left: "14px",
                           top: "50%",
@@ -801,120 +779,182 @@ export const Auth: React.FC = () => {
                           type="text"
                           className="input-field"
                           style={{ paddingLeft: "45px" }}
-                          placeholder="Ej. La Parrilla de Juan"
-                          value={restaurantName}
-                          onChange={(e) => setRestaurantName(e.target.value)}
+                          placeholder="Ej. 1712345678"
+                          value={cedula}
+                          maxLength={10}
+                          onChange={(e) => setCedula(e.target.value.replace(/\D/g, ""))}
                           required
                         />
                       </div>
                     </div>
+                  )}
 
-                    {/* Restaurant Slug */}
-                    <div className="input-group">
-                      <label>Subdominio / Slug URL</label>
-                      <div style={{ position: "relative" }}>
-                        <Link size={18} style={{
-                          position: "absolute",
-                          left: "14px",
-                          top: "50%",
-                          transform: "translateY(-50%)",
-                          color: "var(--text-muted)"
-                        }} />
-                        <input
-                          type="text"
-                          className="input-field"
-                          style={{ paddingLeft: "45px" }}
-                          placeholder="ej-la-parrilla"
-                          value={slug}
-                          onChange={(e) => handleSlugChange(e.target.value)}
-                          required
-                        />
+                  {/* Restaurant Owner specific fields */}
+                  {selectedRole === "restaurant" && (
+                    <>
+                      {/* Restaurant Name */}
+                      <div className="input-group">
+                        <label>Nombre del Restaurante</label>
+                        <div style={{ position: "relative" }}>
+                          <Store size={18} style={{
+                            position: "absolute",
+                            left: "14px",
+                            top: "50%",
+                            transform: "translateY(-50%)",
+                            color: "var(--text-muted)"
+                          }} />
+                          <input
+                            type="text"
+                            className="input-field"
+                            style={{ paddingLeft: "45px" }}
+                            placeholder="Ej. La Parrilla de Juan"
+                            value={restaurantName}
+                            onChange={(e) => setRestaurantName(e.target.value)}
+                            required
+                          />
+                        </div>
                       </div>
-                      <small style={{ color: "var(--text-muted)", fontSize: "11px", marginTop: "2px", display: "block" }}>
-                        URL: http://localhost:5173/r/{slug || "slug"}
-                      </small>
-                    </div>
-                  </>
-                )}
-              </>
-            )}
 
-            {/* Username */}
-            <div className="input-group">
-              <label>Nombre de Usuario</label>
-              <div style={{ position: "relative" }}>
-                <UserIcon size={18} style={{
-                  position: "absolute",
-                  left: "14px",
-                  top: "50%",
-                  transform: "translateY(-50%)",
-                  color: "var(--text-muted)"
-                }} />
-                <input
-                  type="text"
-                  className="input-field"
-                  style={{ paddingLeft: "45px" }}
-                  placeholder="Nombre de usuario"
-                  value={username}
-                  onChange={(e) => setUsername(e.target.value)}
-                  required
-                />
-              </div>
-            </div>
+                      {/* Restaurant Slug */}
+                      <div className="input-group">
+                        <label>Subdominio / Slug URL</label>
+                        <div style={{ position: "relative" }}>
+                          <Link size={18} style={{
+                            position: "absolute",
+                            left: "14px",
+                            top: "50%",
+                            transform: "translateY(-50%)",
+                            color: "var(--text-muted)"
+                          }} />
+                          <input
+                            type="text"
+                            className="input-field"
+                            style={{ paddingLeft: "45px" }}
+                            placeholder="ej-la-parrilla"
+                            value={slug}
+                            onChange={(e) => handleSlugChange(e.target.value)}
+                            required
+                          />
+                        </div>
+                        <small style={{ color: "var(--text-muted)", fontSize: "11px", marginTop: "2px", display: "block" }}>
+                          URL: http://localhost:5173/r/{slug || "slug"}
+                        </small>
+                      </div>
+                    </>
+                  )}
+                </>
+              )}
 
-            {/* Password */}
-            <div className="input-group" style={{ marginBottom: "30px" }}>
-              <label>Contraseña</label>
-              <div style={{ position: "relative" }}>
-                <Lock size={18} style={{
-                  position: "absolute",
-                  left: "14px",
-                  top: "50%",
-                  transform: "translateY(-50%)",
-                  color: "var(--text-muted)"
-                }} />
-                <input
-                  type={showPassword ? "text" : "password"}
-                  className="input-field"
-                  style={{ paddingLeft: "45px", paddingRight: "45px" }}
-                  placeholder="Contraseña"
-                  value={password}
-                  onChange={(e) => setPassword(e.target.value)}
-                  required
-                />
-                <button
-                  type="button"
-                  onClick={() => setShowPassword(!showPassword)}
-                  style={{
+              {/* Username */}
+              <div className="input-group">
+                <label>Nombre de Usuario</label>
+                <div style={{ position: "relative" }}>
+                  <UserIcon size={18} style={{
                     position: "absolute",
-                    right: "12px",
+                    left: "14px",
                     top: "50%",
                     transform: "translateY(-50%)",
-                    background: "transparent",
-                    border: "none",
-                    color: showPassword ? "var(--accent-primary, #ff4757)" : "var(--text-muted, #718096)",
-                    cursor: "pointer",
-                    padding: "4px",
-                    display: "flex",
-                    alignItems: "center",
-                    justifyContent: "center",
-                  }}
-                  title={showPassword ? "Ocultar contraseña" : "Ver contraseña"}
-                >
-                  {showPassword ? <EyeOff size={18} /> : <Eye size={18} />}
-                </button>
+                    color: "var(--text-muted)"
+                  }} />
+                  <input
+                    type="text"
+                    className="input-field"
+                    style={{ paddingLeft: "45px" }}
+                    placeholder="Nombre de usuario"
+                    value={username}
+                    onChange={(e) => setUsername(e.target.value)}
+                    required
+                  />
+                </div>
               </div>
-            </div>
 
-            <button
-              type="submit"
-              className="glow-btn"
-              style={{ width: "100%", padding: "14px", fontSize: "16px" }}
-              disabled={loading}
-            >
-              {loading ? "Procesando..." : isLogin ? "Ingresar al Sistema" : selectedRole === "restaurant" ? "Crear Restaurante" : "Registrarse"}
-            </button>
-          </form>
+              {/* Password */}
+              <div className="input-group" style={{ marginBottom: "30px" }}>
+                <label>Contraseña</label>
+                <div style={{ position: "relative" }}>
+                  <Lock size={18} style={{
+                    position: "absolute",
+                    left: "14px",
+                    top: "50%",
+                    transform: "translateY(-50%)",
+                    color: "var(--text-muted)"
+                  }} />
+                  <input
+                    type={showPassword ? "text" : "password"}
+                    className="input-field"
+                    style={{ paddingLeft: "45px", paddingRight: "45px" }}
+                    placeholder="Contraseña"
+                    value={password}
+                    onChange={(e) => setPassword(e.target.value)}
+                    required
+                  />
+                  <button
+                    type="button"
+                    onClick={() => setShowPassword(!showPassword)}
+                    style={{
+                      position: "absolute",
+                      right: "12px",
+                      top: "50%",
+                      transform: "translateY(-50%)",
+                      background: "transparent",
+                      border: "none",
+                      color: showPassword ? "var(--accent-primary, #ff4757)" : "var(--text-muted, #718096)",
+                      cursor: "pointer",
+                      padding: "4px",
+                      display: "flex",
+                      alignItems: "center",
+                      justifyContent: "center",
+                    }}
+                    title={showPassword ? "Ocultar contraseña" : "Ver contraseña"}
+                  >
+                    {showPassword ? <EyeOff size={18} /> : <Eye size={18} />}
+                  </button>
+                </div>
+              </div>
+
+              <button
+                type="submit"
+                className="glow-btn"
+                style={{ width: "100%", padding: "14px", fontSize: "16px" }}
+                disabled={loading}
+              >
+                {loading ? "Procesando..." : isLogin ? "Ingresar al Sistema" : selectedRole === "restaurant" ? "Crear Restaurante" : "Registrarse"}
+              </button>
+            </form>
+          ) : (
+            <div style={{ textAlign: "center", marginTop: "18px" }}>
+              <p style={{ fontSize: "13px", color: "var(--text-secondary)", margin: "0 0 10px 0" }}>
+                ¿Ya tienes una cuenta creada?
+              </p>
+              <button
+                type="button"
+                onClick={() => setIsLogin(true)}
+                style={{
+                  background: "none",
+                  border: "1px solid var(--border-light, #e2e8f0)",
+                  borderRadius: "10px",
+                  padding: "10px 20px",
+                  color: "var(--text-primary)",
+                  fontWeight: "600",
+                  fontSize: "13px",
+                  cursor: "pointer",
+                  backgroundColor: "#ffffff",
+                  transition: "all 0.2s ease"
+                }}
+                onMouseEnter={(e) => {
+                  e.currentTarget.style.borderColor = "var(--accent-primary, #ff4757)";
+                  e.currentTarget.style.color = "var(--accent-primary, #ff4757)";
+                }}
+                onMouseLeave={(e) => {
+                  e.currentTarget.style.borderColor = "var(--border-light, #e2e8f0)";
+                  e.currentTarget.style.color = "var(--text-primary)";
+                }}
+              >
+                <LogIn size={14} style={{ marginRight: "6px", verticalAlign: "middle" }} />
+                Iniciar sesión con usuario y contraseña
+              </button>
+            </div>
+          )}
 
           {/* Sandbox Quick Access (Only when in Login tab) */}
           {isLogin && (
