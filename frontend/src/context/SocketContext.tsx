@@ -24,7 +24,8 @@ export const SocketProvider: React.FC<{ children: React.ReactNode }> = ({ childr
       return;
     }
 
-    const socketUrl = "http://localhost:5000";
+    const hostname = typeof window !== "undefined" && window.location.hostname ? window.location.hostname : "localhost";
+    const socketUrl = `http://${hostname}:5000`;
     const newSocket = io(socketUrl, {
       transports: ["websocket", "polling"],
       autoConnect: true,

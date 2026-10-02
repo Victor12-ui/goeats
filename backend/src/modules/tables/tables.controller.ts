@@ -1,5 +1,23 @@
 import { Request, Response, NextFunction } from "express";
+import os from "os";
 import { prisma } from "../../config/database";
+
+function getLocalIpAddress(): string {
+  try {
+    const interfaces = os.networkInterfaces();
+    for (const name of Object.keys(interfaces)) {
+      for (const net of interfaces[name] || []) {
+        // Look for non-internal IPv4 address (e.g. 192.168.x.x, 10.x.x.x)
+        if (net.family === "IPv4" && !net.internal && !net.address.startsWith("169.254")) {
+          return net.address;
+        }
+      }
+    }
+  } catch (e) {
+    // fallback
+  }
+  return "localhost";
+}
 
 // DINING AREAS
 
@@ -30,7 +48,19 @@ export async function getDiningAreas(req: Request, res: Response, next: NextFunc
       },
     });
 
-    return res.status(200).json({ success: true, diningAreas, restaurant });
+    const localIp = getLocalIpAddress();
+
+    return res.status(200).json({
+      success: true,
+      diningAreas,
+      restaurant,
+      serverNetwork: {
+        localIp,
+        frontendPort: 5173,
+        backendPort: 5000,
+        suggestedBaseUrl: localIp !== "localhost" ? `http://${localIp}:5173` : `http://localhost:5173`
+      }
+    });
   } catch (error) {
     next(error);
   }

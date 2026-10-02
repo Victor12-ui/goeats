@@ -31,6 +31,7 @@ export const TablesPage: React.FC = () => {
   const [showQRModal, setShowQRModal] = useState(false);
   const [qrTable, setQrTable] = useState<any | null>(null);
   const [restaurantInfo, setRestaurantInfo] = useState<any | null>(null);
+  const [suggestedNetworkIp, setSuggestedNetworkIp] = useState<string | null>(null);
 
   const fetchData = async (isManual = false) => {
     if (isManual) setRefreshing(true);
@@ -44,6 +45,9 @@ export const TablesPage: React.FC = () => {
         setDiningAreas(areas);
         if (areasRes.restaurant) {
           setRestaurantInfo(areasRes.restaurant);
+        }
+        if (areasRes.serverNetwork?.localIp) {
+          setSuggestedNetworkIp(areasRes.serverNetwork.localIp);
         }
         
         // Auto-select first area if none selected
@@ -662,6 +666,7 @@ export const TablesPage: React.FC = () => {
         restaurantName={restaurantInfo?.name || user?.restaurantName || "GoEats"}
         wifiSsid={restaurantInfo?.wifiSsid}
         wifiPassword={restaurantInfo?.wifiPassword}
+        suggestedNetworkIp={suggestedNetworkIp}
       />
     </div>
   );

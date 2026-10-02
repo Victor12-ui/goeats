@@ -240,7 +240,8 @@ export const PublicCatalog: React.FC = () => {
     }
     setWaiterCallLoading(true);
     try {
-      const res = await fetch(`http://localhost:5000/api/restaurants/public/catalog/${slug}/call-waiter`, {
+      const hostname = window.location.hostname || "localhost";
+      const res = await fetch(`http://${hostname}:5000/api/restaurants/public/catalog/${slug}/call-waiter`, {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({ tableId: selectedTable, action }),
@@ -361,7 +362,8 @@ export const PublicCatalog: React.FC = () => {
       }
 
       // Call public endpoint
-      const res = await fetch(`http://localhost:5000/api/restaurants/public/catalog/${slug}/order`, {
+      const hostname = window.location.hostname || "localhost";
+      const res = await fetch(`http://${hostname}:5000/api/restaurants/public/catalog/${slug}/order`, {
         method: "POST",
         headers,
         body: JSON.stringify(payload),

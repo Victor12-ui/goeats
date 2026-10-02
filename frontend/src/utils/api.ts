@@ -1,4 +1,5 @@
-const BASE_URL = "http://localhost:5000/api";
+const hostname = typeof window !== "undefined" && window.location.hostname ? window.location.hostname : "localhost";
+const BASE_URL = `http://${hostname}:5000/api`;
 
 interface RequestOptions extends RequestInit {
   params?: Record<string, string>;

@@ -11,7 +11,10 @@ import {
   Sparkles,
   Wifi,
   Store,
-  Layers
+  Layers,
+  Smartphone,
+  Laptop,
+  Globe
 } from "lucide-react";
 
 export interface TableItem {
@@ -37,6 +40,7 @@ interface TableQRModalProps {
   restaurantName?: string;
   wifiSsid?: string | null;
   wifiPassword?: string | null;
+  suggestedNetworkIp?: string | null;
 }
 
 export const TableQRModal: React.FC<TableQRModalProps> = ({
@@ -47,7 +51,8 @@ export const TableQRModal: React.FC<TableQRModalProps> = ({
   restaurantSlug,
   restaurantName = "Restaurante",
   wifiSsid,
-  wifiPassword
+  wifiPassword,
+  suggestedNetworkIp
 }) => {
   // Flatten all tables
   const allTablesWithArea = diningAreas.flatMap((area) =>
@@ -57,12 +62,53 @@ export const TableQRModal: React.FC<TableQRModalProps> = ({
   const [activeTableId, setActiveTableId] = useState<number | null>(null);
   const [activeAreaFilter, setActiveAreaFilter] = useState<number | "ALL">("ALL");
   const [viewMode, setViewMode] = useState<"SINGLE" | "BATCH">("SINGLE");
+
+  // Host configuration for QR generation
+  // By default, if suggestedNetworkIp is available (e.g. 192.168.1.76), use it so mobile phones on Wi-Fi can scan directly!
+  const defaultNetworkHost = suggestedNetworkIp && suggestedNetworkIp !== "localhost"
+    ? `http://${suggestedNetworkIp}:5173`
+    : (window.location.hostname !== "localhost" && window.location.hostname !== "127.0.0.1")
+      ? window.location.origin
+      : "http://192.168.1.76:5173";
+
+  const [hostMode, setHostMode] = useState<"WIFI" | "LOCALHOST" | "CUSTOM">("WIFI");
+  const [customHost, setCustomHost] = useState("");
+  const [networkIp, setNetworkIp] = useState(suggestedNetworkIp || "192.168.1.76");
+  const [editingIp, setEditingIp] = useState(false);
+
   const [qrDataUrl, setQrDataUrl] = useState<string>("");
   const [batchQrMap, setBatchQrMap] = useState<Record<number, string>>({});
   const [copied, setCopied] = useState(false);
   const [generating, setGenerating] = useState(false);
 
   const printableRef = useRef<HTMLDivElement>(null);
+
+  useEffect(() => {
+    if (suggestedNetworkIp && suggestedNetworkIp !== "localhost") {
+      setNetworkIp(suggestedNetworkIp);
+    }
+  }, [suggestedNetworkIp]);
+
+  // Compute active base URL for QR
+  const getActiveBaseUrl = () => {
+    if (hostMode === "WIFI") {
+      return `http://${networkIp}:5173`;
+    }
+    if (hostMode === "LOCALHOST") {
+      return "http://localhost:5173";
+    }
+    if (hostMode === "CUSTOM") {
+      return customHost.trim().replace(/\/+$/, "") || window.location.origin;
+    }
+    return defaultNetworkHost;
+  };
+
+  // Helper to build QR URL
+  const getTableUrl = (tableId: number) => {
+    const base = getActiveBaseUrl();
+    const slug = restaurantSlug || "restaurante";
+    return `${base}/r/${slug}?tableId=${tableId}`;
+  };
 
   // Initialize selected table
   useEffect(() => {
@@ -78,13 +124,6 @@ export const TableQRModal: React.FC<TableQRModalProps> = ({
 
   // Current table object
   const currentTable = allTablesWithArea.find((t) => t.id === activeTableId) || allTablesWithArea[0];
-
-  // Helper to build QR URL
-  const getTableUrl = (tableId: number) => {
-    const origin = window.location.origin;
-    const slug = restaurantSlug || "restaurante";
-    return `${origin}/r/${slug}?tableId=${tableId}`;
-  };
 
   // Generate QR for single table
   useEffect(() => {
@@ -106,7 +145,7 @@ export const TableQRModal: React.FC<TableQRModalProps> = ({
       .catch((err) => {
         console.error("Error generating QR code:", err);
       });
-  }, [currentTable, restaurantSlug]);
+  }, [currentTable, restaurantSlug, hostMode, networkIp, customHost]);
 
   // Generate batch QRs for all tables
   useEffect(() => {
@@ -134,7 +173,7 @@ export const TableQRModal: React.FC<TableQRModalProps> = ({
           setGenerating(false);
         });
     }
-  }, [viewMode, diningAreas, restaurantSlug]);
+  }, [viewMode, diningAreas, restaurantSlug, hostMode, networkIp, customHost]);
 
   if (!isOpen) return null;
 
@@ -316,7 +355,7 @@ export const TableQRModal: React.FC<TableQRModalProps> = ({
         className="glass-card"
         style={{
           width: "100%",
-          maxWidth: viewMode === "BATCH" ? "980px" : "820px",
+          maxWidth: viewMode === "BATCH" ? "980px" : "860px",
           maxHeight: "92vh",
           display: "flex",
           flexDirection: "column",
@@ -438,6 +477,163 @@ export const TableQRModal: React.FC<TableQRModalProps> = ({
             </button>
           </div>
         </div>
+
+        {/* IP / Network Selector Banner for Mobile Scanning */}
+        <div
+          style={{
+            backgroundColor: "rgba(0, 165, 67, 0.06)",
+            borderBottom: "1px solid rgba(0, 165, 67, 0.2)",
+            padding: "10px 24px",
+            display: "flex",
+            alignItems: "center",
+            justifyContent: "space-between",
+            flexWrap: "wrap",
+            gap: "10px",
+            fontSize: "12px"
+          }}
+        >
+          <div style={{ display: "flex", alignItems: "center", gap: "8px", color: "var(--text-primary)" }}>
+            <Smartphone size={16} style={{ color: "var(--accent-primary)", flexShrink: 0 }} />
+            <span>
+              <strong>Para escanear con celular:</strong> El celular y la PC deben estar en la misma red Wi-Fi.
+            </span>
+          </div>
+
+          <div style={{ display: "flex", alignItems: "center", gap: "8px" }}>
+            <span style={{ fontSize: "11px", color: "var(--text-secondary)", fontWeight: 600 }}>Destino QR:</span>
+            
+            <button
+              type="button"
+              onClick={() => setHostMode("WIFI")}
+              style={{
+                padding: "4px 10px",
+                borderRadius: "6px",
+                fontSize: "11px",
+                fontWeight: 700,
+                cursor: "pointer",
+                border: hostMode === "WIFI" ? "1px solid var(--accent-primary)" : "1px solid var(--border-light)",
+                backgroundColor: hostMode === "WIFI" ? "var(--accent-primary)" : "var(--bg-secondary)",
+                color: hostMode === "WIFI" ? "#ffffff" : "var(--text-secondary)",
+                display: "flex",
+                alignItems: "center",
+                gap: "4px"
+              }}
+              title="Usa la IP local de tu Wi-Fi para que cualquier celular en el local pueda abrir el menú"
+            >
+              <Wifi size={12} />
+              Wi-Fi Local ({networkIp})
+            </button>
+
+            <button
+              type="button"
+              onClick={() => setHostMode("LOCALHOST")}
+              style={{
+                padding: "4px 10px",
+                borderRadius: "6px",
+                fontSize: "11px",
+                fontWeight: 700,
+                cursor: "pointer",
+                border: hostMode === "LOCALHOST" ? "1px solid var(--accent-primary)" : "1px solid var(--border-light)",
+                backgroundColor: hostMode === "LOCALHOST" ? "var(--accent-primary)" : "var(--bg-secondary)",
+                color: hostMode === "LOCALHOST" ? "#ffffff" : "var(--text-secondary)",
+                display: "flex",
+                alignItems: "center",
+                gap: "4px"
+              }}
+              title="Para probar dentro de esta misma computadora"
+            >
+              <Laptop size={12} />
+              Localhost
+            </button>
+
+            <button
+              type="button"
+              onClick={() => setHostMode("CUSTOM")}
+              style={{
+                padding: "4px 10px",
+                borderRadius: "6px",
+                fontSize: "11px",
+                fontWeight: 700,
+                cursor: "pointer",
+                border: hostMode === "CUSTOM" ? "1px solid var(--accent-primary)" : "1px solid var(--border-light)",
+                backgroundColor: hostMode === "CUSTOM" ? "var(--accent-primary)" : "var(--bg-secondary)",
+                color: hostMode === "CUSTOM" ? "#ffffff" : "var(--text-secondary)",
+                display: "flex",
+                alignItems: "center",
+                gap: "4px"
+              }}
+              title="Para usar un dominio público (ej. https://mirestaurante.com o ngrok)"
+            >
+              <Globe size={12} />
+              Personalizado
+            </button>
+
+            {hostMode === "WIFI" && (
+              <button
+                type="button"
+                onClick={() => setEditingIp(!editingIp)}
+                style={{
+                  fontSize: "11px",
+                  color: "var(--accent-primary)",
+                  background: "none",
+                  border: "none",
+                  cursor: "pointer",
+                  textDecoration: "underline",
+                  marginLeft: "4px"
+                }}
+              >
+                {editingIp ? "Listo" : "Cambiar IP"}
+              </button>
+            )}
+          </div>
+        </div>
+
+        {/* Custom Host / IP Input Drawer */}
+        {(hostMode === "CUSTOM" || editingIp) && (
+          <div
+            style={{
+              padding: "10px 24px",
+              backgroundColor: "var(--bg-secondary)",
+              borderBottom: "1px solid var(--border-light)",
+              display: "flex",
+              alignItems: "center",
+              gap: "12px"
+            }}
+          >
+            {hostMode === "CUSTOM" ? (
+              <div style={{ display: "flex", alignItems: "center", gap: "8px", flex: 1 }}>
+                <label style={{ fontSize: "12px", fontWeight: 700, color: "var(--text-secondary)" }}>
+                  URL Pública Base:
+                </label>
+                <input
+                  type="text"
+                  placeholder="https://tudominio.com o https://xxxx.ngrok-free.app"
+                  value={customHost}
+                  onChange={(e) => setCustomHost(e.target.value)}
+                  className="input-field"
+                  style={{ flex: 1, padding: "6px 12px", fontSize: "12px" }}
+                />
+              </div>
+            ) : (
+              <div style={{ display: "flex", alignItems: "center", gap: "8px", flex: 1 }}>
+                <label style={{ fontSize: "12px", fontWeight: 700, color: "var(--text-secondary)" }}>
+                  IP Local Wi-Fi de tu Computadora:
+                </label>
+                <input
+                  type="text"
+                  placeholder="Ej. 192.168.1.76"
+                  value={networkIp}
+                  onChange={(e) => setNetworkIp(e.target.value)}
+                  className="input-field"
+                  style={{ width: "180px", padding: "6px 12px", fontSize: "12px" }}
+                />
+                <span style={{ fontSize: "11px", color: "var(--text-muted)" }}>
+                  Puerto 5173 • Abre cmd y ejecuta ipconfig si tu IP cambia.
+                </span>
+              </div>
+            )}
+          </div>
+        )}
 
         {/* Modal Body */}
         <div style={{ flex: 1, overflowY: "auto", padding: "24px" }}>
@@ -747,17 +943,32 @@ export const TableQRModal: React.FC<TableQRModalProps> = ({
                         border: "1px solid var(--border-light)"
                       }}
                     >
-                      <span
-                        style={{
-                          fontSize: "11px",
-                          fontWeight: 700,
-                          color: "var(--text-secondary)",
-                          textTransform: "uppercase",
-                          letterSpacing: "0.5px"
-                        }}
-                      >
-                        Enlace Directo de la Mesa
-                      </span>
+                      <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center" }}>
+                        <span
+                          style={{
+                            fontSize: "11px",
+                            fontWeight: 700,
+                            color: "var(--text-secondary)",
+                            textTransform: "uppercase",
+                            letterSpacing: "0.5px"
+                          }}
+                        >
+                          Enlace Codificado en el QR
+                        </span>
+                        <span
+                          style={{
+                            fontSize: "10px",
+                            fontWeight: 700,
+                            padding: "2px 6px",
+                            borderRadius: "4px",
+                            backgroundColor: hostMode === "WIFI" ? "rgba(0, 165, 67, 0.15)" : "var(--bg-tertiary)",
+                            color: hostMode === "WIFI" ? "var(--success)" : "var(--text-secondary)"
+                          }}
+                        >
+                          {hostMode === "WIFI" ? "Apto Celular Móvil" : hostMode}
+                        </span>
+                      </div>
+
                       <div
                         style={{
                           marginTop: "8px",
@@ -844,24 +1055,11 @@ export const TableQRModal: React.FC<TableQRModalProps> = ({
                         }}
                       >
                         <Sparkles size={14} style={{ color: "var(--accent-primary)" }} />
-                        ¿Cómo funciona con tus clientes?
+                        ¿Por qué usar la IP Wi-Fi en lugar de localhost?
                       </h4>
-                      <ul
-                        style={{
-                          margin: "10px 0 0 0",
-                          paddingLeft: "18px",
-                          fontSize: "12px",
-                          color: "var(--text-secondary)",
-                          display: "flex",
-                          flexDirection: "column",
-                          gap: "6px"
-                        }}
-                      >
-                        <li>El comensal se sienta en la mesa y apunta su cámara al QR.</li>
-                        <li>Se abre el menú interactivo con la mesa ya seleccionada.</li>
-                        <li>Al enviar el pedido, suena en Cocina KDS y en el POS.</li>
-                        <li>El cliente puede llamar al mesero o pedir la cuenta con 1 clic.</li>
-                      </ul>
+                      <p style={{ margin: "6px 0 0 0", fontSize: "11px", color: "var(--text-secondary)", lineHeight: 1.4 }}>
+                        Cuando escaneas con tu celular, la palabra <em>localhost</em> hace que el teléfono busque la página dentro de sí mismo. Al usar la IP de tu Wi-Fi (<code>{networkIp}</code>), tu celular se conecta directamente al servidor de esta computadora.
+                      </p>
                     </div>
 
                     {/* Main Export Action Buttons */}
@@ -928,7 +1126,7 @@ export const TableQRModal: React.FC<TableQRModalProps> = ({
                     Planilla de Códigos QR para Todo el Restaurante
                   </h3>
                   <p style={{ fontSize: "12px", color: "var(--text-secondary)", margin: "4px 0 0 0" }}>
-                    Total: {allTablesWithArea.length} mesas configuradas. Imprime y recorta para colocar en portamenús acrílicos.
+                    Total: {allTablesWithArea.length} mesas configuradas en red ({getActiveBaseUrl()}). Imprime y recorta para colocar en portamenús acrílicos.
                   </p>
                 </div>
 

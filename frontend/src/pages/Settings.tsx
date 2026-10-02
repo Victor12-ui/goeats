@@ -110,6 +110,7 @@ export const Settings: React.FC = () => {
   const [editingTableId, setEditingTableId] = useState<number | null>(null);
   const [showQRModal, setShowQRModal] = useState(false);
   const [qrModalTable, setQrModalTable] = useState<any | null>(null);
+  const [suggestedNetworkIp, setSuggestedNetworkIp] = useState<string | null>(null);
 
   // Staff management states
   const [staffList, setStaffList] = useState<any[]>([]);
@@ -219,6 +220,9 @@ export const Settings: React.FC = () => {
         setDiningAreas(res.diningAreas || []);
         if (res.restaurant?.slug && !slug) {
           setSlug(res.restaurant.slug);
+        }
+        if (res.serverNetwork?.localIp) {
+          setSuggestedNetworkIp(res.serverNetwork.localIp);
         }
       }
     } catch (err: any) {
@@ -4105,6 +4109,7 @@ export const Settings: React.FC = () => {
         restaurantName={name || user?.restaurantName || "GoEats"}
         wifiSsid={wifiSsid}
         wifiPassword={wifiPassword}
+        suggestedNetworkIp={suggestedNetworkIp}
       />
     </div>
   );
