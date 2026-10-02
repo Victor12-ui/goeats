@@ -29,6 +29,7 @@ import {
 } from "lucide-react";
 import { ClipboardList, ShoppingBag, DollarSign } from "lucide-react";
 import { RestaurantLocationPicker } from "../components/RestaurantLocationPicker";
+import { TableQRModal } from "../components/TableQRModal";
 
 interface BankAccount {
   id: string;
@@ -107,6 +108,8 @@ export const Settings: React.FC = () => {
   const [tableCapacity, setTableCapacity] = useState(4);
   const [selectedAreaId, setSelectedAreaId] = useState<number | null>(null);
   const [editingTableId, setEditingTableId] = useState<number | null>(null);
+  const [showQRModal, setShowQRModal] = useState(false);
+  const [qrModalTable, setQrModalTable] = useState<any | null>(null);
 
   // Staff management states
   const [staffList, setStaffList] = useState<any[]>([]);
@@ -214,6 +217,9 @@ export const Settings: React.FC = () => {
       const res = await apiRequest("/tables/dining-areas");
       if (res.success) {
         setDiningAreas(res.diningAreas || []);
+        if (res.restaurant?.slug && !slug) {
+          setSlug(res.restaurant.slug);
+        }
       }
     } catch (err: any) {
       console.error("Error al cargar salones y mesas:", err);
@@ -1056,184 +1062,6 @@ export const Settings: React.FC = () => {
       setError(err.message || "Error al eliminar mesa");
       setTimeout(() => setError(null), 5000);
     }
-  };
-
-  const handleDownloadQR = (table: any, areaName: string) => {
-    const qrUrl = `${window.location.origin}/r/${slug}?tableId=${table.id}`;
-    const qrImageUrl = `https://api.qrserver.com/v1/create-qr-code/?size=400x400&data=${encodeURIComponent(qrUrl)}`;
-    
-    const img = new Image();
-    img.crossOrigin = "anonymous";
-    img.onload = () => {
-      const canvas = document.createElement("canvas");
-      canvas.width = 800;
-      canvas.height = 1200;
-      const ctx = canvas.getContext("2d");
-      if (!ctx) return;
-
-      // 1. Background
-      ctx.fillStyle = "#ffffff";
-      ctx.fillRect(0, 0, canvas.width, canvas.height);
-
-      // 2. Red Top Header Bar
-      ctx.fillStyle = "#ff4757";
-      ctx.fillRect(0, 0, canvas.width, 16);
-
-      // 3. Logo "GoEats"
-      ctx.textAlign = "center";
-      ctx.textBaseline = "middle";
-      ctx.font = "800 44px Outfit, Arial, sans-serif";
-      
-      const logoText1 = "Go";
-      const logoText2 = "Eats";
-      const w1 = ctx.measureText(logoText1).width;
-      const w2 = ctx.measureText(logoText2).width;
-      const totalWidth = w1 + w2;
-      const startX = (canvas.width - totalWidth) / 2;
-
-      ctx.textAlign = "left";
-      ctx.fillStyle = "#ff4757";
-      ctx.fillText(logoText1, startX, 100);
-      ctx.fillStyle = "#2f3542";
-      ctx.fillText(logoText2, startX + w1, 100);
-
-      // 4. Restaurant Name
-      ctx.textAlign = "center";
-      ctx.fillStyle = "#2f3542";
-      ctx.font = "600 32px Outfit, Arial, sans-serif";
-      ctx.fillText(name, canvas.width / 2, 160);
-
-      // 5. QR Code Background Box
-      const qrBoxSize = 480;
-      const qrBoxX = (canvas.width - qrBoxSize) / 2;
-      const qrBoxY = 220;
-      
-      ctx.fillStyle = "#f8fafc";
-      ctx.beginPath();
-      const radius = 24;
-      if (ctx.roundRect) {
-        ctx.roundRect(qrBoxX, qrBoxY, qrBoxSize, qrBoxSize, radius);
-      } else {
-        ctx.rect(qrBoxX, qrBoxY, qrBoxSize, qrBoxSize);
-      }
-      ctx.fill();
-      
-      ctx.strokeStyle = "#e2e8f0";
-      ctx.lineWidth = 2;
-      ctx.stroke();
-
-      // 6. Draw QR Code Image
-      const qrSize = 400;
-      const qrX = (canvas.width - qrSize) / 2;
-      const qrY = qrBoxY + (qrBoxSize - qrSize) / 2;
-      ctx.drawImage(img, qrX, qrY, qrSize, qrSize);
-
-      // 7. Table Info
-      ctx.fillStyle = "#a4b0be";
-      ctx.font = "bold 20px Outfit, Arial, sans-serif";
-      ctx.fillText("ESCANEA Y PIDE DIRECTO", canvas.width / 2, 760);
-
-      ctx.fillStyle = "#2f3542";
-      ctx.font = "800 64px Outfit, Arial, sans-serif";
-      ctx.fillText(`Mesa ${table.number}`, canvas.width / 2, 825);
-
-      // Area Tag
-      const areaText = areaName.toUpperCase();
-      ctx.font = "600 22px Outfit, Arial, sans-serif";
-      const tagW = ctx.measureText(areaText).width + 32;
-      const tagH = 40;
-      const tagX = (canvas.width - tagW) / 2;
-      const tagY = 875;
-
-      ctx.fillStyle = "#ffeef0";
-      ctx.beginPath();
-      if (ctx.roundRect) {
-        ctx.roundRect(tagX, tagY, tagW, tagH, 20);
-      } else {
-        ctx.rect(tagX, tagY, tagW, tagH);
-      }
-      ctx.fill();
-
-      ctx.fillStyle = "#ff4757";
-      ctx.fillText(areaText, canvas.width / 2, tagY + tagH / 2 + 2);
-
-      // 8. WiFi details OR instructions
-      if (wifiSsid) {
-        const wifiW = 600;
-        const wifiH = 150;
-        const wifiX = (canvas.width - wifiW) / 2;
-        const wifiY = 930;
-
-        ctx.fillStyle = "#f8fafc";
-        ctx.beginPath();
-        if (ctx.roundRect) {
-          ctx.roundRect(wifiX, wifiY, wifiW, wifiH, 16);
-        } else {
-          ctx.rect(wifiX, wifiY, wifiW, wifiH);
-        }
-        ctx.fill();
-
-        ctx.strokeStyle = "#cbd5e1";
-        ctx.lineWidth = 2;
-        ctx.setLineDash([6, 6]);
-        ctx.stroke();
-        ctx.setLineDash([]);
-
-        ctx.fillStyle = "#ff4757";
-        ctx.font = "800 18px Outfit, Arial, sans-serif";
-        ctx.fillText("WIFI DEL LOCAL", canvas.width / 2, wifiY + 35);
-
-        // Network SSID Line
-        ctx.fillStyle = "#2f3542";
-        let ssidFontSize = 22;
-        ctx.font = `500 ${ssidFontSize}px Outfit, Arial, sans-serif`;
-        const ssidText = `Red: ${wifiSsid}`;
-        while (ctx.measureText(ssidText).width > (wifiW - 60) && ssidFontSize > 14) {
-          ssidFontSize -= 1;
-          ctx.font = `500 ${ssidFontSize}px Outfit, Arial, sans-serif`;
-        }
-        ctx.fillText(ssidText, canvas.width / 2, wifiY + 75);
-
-        // Password Line
-        let passFontSize = 22;
-        ctx.font = `500 ${passFontSize}px Outfit, Arial, sans-serif`;
-        const passText = `Clave: ${wifiPassword || "Libre"}`;
-        while (ctx.measureText(passText).width > (wifiW - 60) && passFontSize > 14) {
-          passFontSize -= 1;
-          ctx.font = `500 ${passFontSize}px Outfit, Arial, sans-serif`;
-        }
-        ctx.fillText(passText, canvas.width / 2, wifiY + 115);
-
-        ctx.fillStyle = "#747d8c";
-        ctx.font = "500 20px Outfit, Arial, sans-serif";
-        ctx.fillText("Escanea el código QR con tu celular para ver el menú", canvas.width / 2, 1120);
-        ctx.fillText("y realizar tu pedido directo a la cocina.", canvas.width / 2, 1150);
-      } else {
-        ctx.fillStyle = "#747d8c";
-        ctx.font = "500 24px Outfit, Arial, sans-serif";
-        ctx.fillText("Escanea el código QR con tu celular para ver", canvas.width / 2, 980);
-        ctx.fillText("nuestro menú y realizar tu pedido directo a la cocina.", canvas.width / 2, 1020);
-      }
-
-      try {
-        const dataUrl = canvas.toDataURL("image/jpeg", 0.95);
-        const link = document.createElement("a");
-        link.href = dataUrl;
-        link.download = `Folleto_Mesa_${String(table.number).replace(/\s+/g, "_")}.jpg`;
-        document.body.appendChild(link);
-        link.click();
-        document.body.removeChild(link);
-      } catch (err) {
-        console.error("Error generating JPEG:", err);
-        alert("Error al exportar a JPG debido a seguridad del navegador. Inténtalo de nuevo.");
-      }
-    };
-
-    img.onerror = () => {
-      alert("Error al cargar la imagen de código QR. Inténtalo de nuevo.");
-    };
-
-    img.src = qrImageUrl;
   };
 
   if (loading) {
@@ -2181,21 +2009,43 @@ export const Settings: React.FC = () => {
                 Organiza tu restaurante por áreas (salón, terraza, VIP) y gestiona sus mesas para pedidos rápidos por QR.
               </p>
             </div>
-            <button
-              type="button"
-              onClick={handleOpenAddArea}
-              className="glow-btn"
-              style={{
-                padding: "10px 18px",
-                fontSize: "13px",
-                display: "flex",
-                alignItems: "center",
-                gap: "6px"
-              }}
-            >
-              <Plus size={16} />
-              Crear Salón / Sala
-            </button>
+            <div style={{ display: "flex", gap: "10px" }}>
+              <button
+                type="button"
+                onClick={() => {
+                  setQrModalTable(null);
+                  setShowQRModal(true);
+                }}
+                className="glow-btn"
+                style={{
+                  padding: "10px 18px",
+                  fontSize: "13px",
+                  display: "flex",
+                  alignItems: "center",
+                  gap: "6px"
+                }}
+                title="Ver, descargar o imprimir códigos QR de las mesas"
+              >
+                <QrCode size={16} />
+                Códigos QR de Mesas
+              </button>
+
+              <button
+                type="button"
+                onClick={handleOpenAddArea}
+                className="secondary-btn"
+                style={{
+                  padding: "10px 18px",
+                  fontSize: "13px",
+                  display: "flex",
+                  alignItems: "center",
+                  gap: "6px"
+                }}
+              >
+                <Plus size={16} />
+                Crear Salón / Sala
+              </button>
+            </div>
           </div>
 
           {/* Dining Areas List */}
@@ -2260,6 +2110,32 @@ export const Settings: React.FC = () => {
                     </div>
 
                     <div style={{ display: "flex", gap: "10px" }}>
+                      {area.tables && area.tables.length > 0 && (
+                        <button
+                          type="button"
+                          onClick={() => {
+                            setQrModalTable(area.tables[0]);
+                            setShowQRModal(true);
+                          }}
+                          style={{
+                            padding: "6px 12px",
+                            fontSize: "12px",
+                            borderRadius: "var(--radius-sm)",
+                            backgroundColor: "rgba(255, 71, 87, 0.08)",
+                            border: "1px solid rgba(255, 71, 87, 0.2)",
+                            color: "var(--accent-primary)",
+                            cursor: "pointer",
+                            display: "flex",
+                            alignItems: "center",
+                            gap: "4px",
+                            fontWeight: 600
+                          }}
+                          title="Ver o imprimir los códigos QR de este salón"
+                        >
+                          <QrCode size={14} />
+                          QRs del Salón
+                        </button>
+                      )}
                       <button
                         type="button"
                         onClick={() => handleOpenAddTable(area.id)}
@@ -2413,23 +2289,27 @@ export const Settings: React.FC = () => {
                           }}>
                             <button
                               type="button"
-                              onClick={() => handleDownloadQR(table, area.name)}
+                              onClick={() => {
+                                setQrModalTable(table);
+                                setShowQRModal(true);
+                              }}
                               style={{
                                 fontSize: "11px",
                                 padding: "4px 8px",
                                 borderRadius: "4px",
-                                backgroundColor: "rgba(255, 71, 87, 0.05)",
-                                border: "1px solid rgba(255, 71, 87, 0.15)",
-                                color: "var(--accent-secondary)",
+                                backgroundColor: "rgba(255, 71, 87, 0.08)",
+                                border: "1px solid rgba(255, 71, 87, 0.2)",
+                                color: "var(--accent-primary)",
                                 cursor: "pointer",
                                 display: "flex",
                                 alignItems: "center",
                                 gap: "4px",
-                                fontWeight: 600
+                                fontWeight: 700
                               }}
+                              title="Ver, probar o imprimir el código QR de esta mesa"
                             >
                               <QrCode size={12} />
-                              Descargar QR
+                              Ver / Imprimir QR
                             </button>
 
                             <div style={{ display: "flex", gap: "6px" }}>
@@ -4214,6 +4094,18 @@ export const Settings: React.FC = () => {
           </div>
         </div>
       )}
+
+      {/* TABLE QR MODAL */}
+      <TableQRModal
+        isOpen={showQRModal}
+        onClose={() => setShowQRModal(false)}
+        selectedTable={qrModalTable}
+        diningAreas={diningAreas}
+        restaurantSlug={slug || (user as any)?.restaurantSlug || "prueba"}
+        restaurantName={name || user?.restaurantName || "GoEats"}
+        wifiSsid={wifiSsid}
+        wifiPassword={wifiPassword}
+      />
     </div>
   );
 };

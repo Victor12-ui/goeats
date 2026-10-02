@@ -53,6 +53,7 @@ export async function login(req: Request, res: Response, next: NextFunction) {
         walletBalance: user.walletBalance,
         restaurantId: user.restaurantId,
         restaurantName: user.restaurant?.name || null,
+        restaurantSlug: user.restaurant?.slug || null,
         isPlus: user.isPlus,
       },
     });

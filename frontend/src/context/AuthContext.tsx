@@ -9,6 +9,7 @@ export interface User {
   role: Role;
   restaurantId: number | null;
   restaurantName?: string | null;
+  restaurantSlug?: string | null;
   isPlus?: boolean;
 }
 

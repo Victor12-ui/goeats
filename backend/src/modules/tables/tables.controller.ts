@@ -18,7 +18,19 @@ export async function getDiningAreas(req: Request, res: Response, next: NextFunc
       },
     });
 
-    return res.status(200).json({ success: true, diningAreas });
+    const restaurant = await prisma.restaurant.findUnique({
+      where: { id: restaurantId },
+      select: {
+        id: true,
+        name: true,
+        slug: true,
+        logo: true,
+        wifiSsid: true,
+        wifiPassword: true,
+      },
+    });
+
+    return res.status(200).json({ success: true, diningAreas, restaurant });
   } catch (error) {
     next(error);
   }

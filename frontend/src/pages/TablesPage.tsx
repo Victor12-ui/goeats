@@ -3,6 +3,7 @@ import { useNavigate } from "react-router-dom";
 import { apiRequest } from "../utils/api";
 import { useSocket } from "../context/SocketContext";
 import { useAuth } from "../context/AuthContext";
+import { TableQRModal } from "../components/TableQRModal";
 import {
   Utensils,
   Users,
@@ -12,7 +13,8 @@ import {
   RefreshCw,
   X,
   PlusCircle,
-  CreditCard
+  CreditCard,
+  QrCode
 } from "lucide-react";
 
 export const TablesPage: React.FC = () => {
@@ -26,6 +28,9 @@ export const TablesPage: React.FC = () => {
   const [selectedTable, setSelectedTable] = useState<any | null>(null);
   const [loading, setLoading] = useState(true);
   const [refreshing, setRefreshing] = useState(false);
+  const [showQRModal, setShowQRModal] = useState(false);
+  const [qrTable, setQrTable] = useState<any | null>(null);
+  const [restaurantInfo, setRestaurantInfo] = useState<any | null>(null);
 
   const fetchData = async (isManual = false) => {
     if (isManual) setRefreshing(true);
@@ -37,6 +42,9 @@ export const TablesPage: React.FC = () => {
       if (areasRes.success) {
         const areas = areasRes.diningAreas || [];
         setDiningAreas(areas);
+        if (areasRes.restaurant) {
+          setRestaurantInfo(areasRes.restaurant);
+        }
         
         // Auto-select first area if none selected
         if (areas.length > 0 && !selectedAreaId) {
@@ -215,15 +223,37 @@ export const TablesPage: React.FC = () => {
             </p>
           </div>
           
-          <button 
-            onClick={() => fetchData(true)} 
-            className="secondary-btn" 
-            style={{ padding: "8px 16px", fontSize: "13px", height: "38px" }}
-            disabled={refreshing}
-          >
-            <RefreshCw size={16} className={refreshing ? "spin" : ""} style={{ marginRight: "4px" }} />
-            {refreshing ? "Actualizando..." : "Actualizar"}
-          </button>
+          <div style={{ display: "flex", gap: "10px", alignItems: "center" }}>
+            <button
+              onClick={() => {
+                setQrTable(null);
+                setShowQRModal(true);
+              }}
+              className="glow-btn"
+              style={{
+                padding: "8px 16px",
+                fontSize: "13px",
+                height: "38px",
+                display: "flex",
+                alignItems: "center",
+                gap: "6px"
+              }}
+              title="Ver, descargar o imprimir códigos QR para pedidos en mesa"
+            >
+              <QrCode size={16} />
+              Códigos QR de Mesas
+            </button>
+
+            <button 
+              onClick={() => fetchData(true)} 
+              className="secondary-btn" 
+              style={{ padding: "8px 16px", fontSize: "13px", height: "38px" }}
+              disabled={refreshing}
+            >
+              <RefreshCw size={16} className={refreshing ? "spin" : ""} style={{ marginRight: "4px" }} />
+              {refreshing ? "Actualizando..." : "Actualizar"}
+            </button>
+          </div>
         </div>
 
         {/* Salones Tab bar */}
@@ -343,18 +373,46 @@ export const TablesPage: React.FC = () => {
                       </span>
                     </div>
 
-                    {/* Status Badge */}
-                    <span style={{
-                      fontSize: "10px",
-                      fontWeight: 700,
-                      padding: "2px 8px",
-                      borderRadius: "20px",
-                      textTransform: "uppercase",
-                      backgroundColor: isOccupied ? "rgba(255, 71, 87, 0.1)" : "rgba(46, 213, 115, 0.1)",
-                      color: isOccupied ? "var(--danger)" : "var(--success)"
-                    }}>
-                      {isOccupied ? "Ocupada" : "Libre"}
-                    </span>
+                    {/* Status Badge & QR Button */}
+                    <div style={{ display: "flex", alignItems: "center", gap: "6px" }}>
+                      <button
+                        type="button"
+                        onClick={(e) => {
+                          e.stopPropagation();
+                          setQrTable(table);
+                          setShowQRModal(true);
+                        }}
+                        style={{
+                          backgroundColor: "var(--bg-tertiary)",
+                          border: "1px solid var(--border-light)",
+                          borderRadius: "6px",
+                          padding: "2px 6px",
+                          fontSize: "11px",
+                          fontWeight: 700,
+                          cursor: "pointer",
+                          display: "flex",
+                          alignItems: "center",
+                          gap: "3px",
+                          color: "var(--text-secondary)"
+                        }}
+                        title={`Ver código QR de Mesa ${table.number}`}
+                      >
+                        <QrCode size={12} />
+                        QR
+                      </button>
+
+                      <span style={{
+                        fontSize: "10px",
+                        fontWeight: 700,
+                        padding: "2px 8px",
+                        borderRadius: "20px",
+                        textTransform: "uppercase",
+                        backgroundColor: isOccupied ? "rgba(255, 71, 87, 0.1)" : "rgba(46, 213, 115, 0.1)",
+                        color: isOccupied ? "var(--danger)" : "var(--success)"
+                      }}>
+                        {isOccupied ? "Ocupada" : "Libre"}
+                      </span>
+                    </div>
                   </div>
 
                   {/* Bottom: Client Name / Order Total if occupied */}
@@ -540,6 +598,30 @@ export const TablesPage: React.FC = () => {
                   <Printer size={16} />
                   Imprimir Comanda / Pre-cuenta
                 </button>
+
+                <button
+                  type="button"
+                  onClick={() => {
+                    setQrTable(selectedTable);
+                    setShowQRModal(true);
+                  }}
+                  className="secondary-btn"
+                  style={{
+                    width: "100%",
+                    padding: "10px",
+                    fontSize: "13px",
+                    display: "flex",
+                    alignItems: "center",
+                    justifyContent: "center",
+                    gap: "8px",
+                    backgroundColor: "rgba(255, 71, 87, 0.05)",
+                    borderColor: "rgba(255, 71, 87, 0.2)",
+                    color: "var(--accent-primary)"
+                  }}
+                >
+                  <QrCode size={16} />
+                  Ver / Imprimir QR de Mesa {selectedTable.number}
+                </button>
               </div>
             </div>
 
@@ -569,6 +651,18 @@ export const TablesPage: React.FC = () => {
           </div>
         )}
       </div>
+
+      {/* TABLE QR MODAL */}
+      <TableQRModal
+        isOpen={showQRModal}
+        onClose={() => setShowQRModal(false)}
+        selectedTable={qrTable}
+        diningAreas={diningAreas}
+        restaurantSlug={restaurantInfo?.slug || (user as any)?.restaurantSlug || "prueba"}
+        restaurantName={restaurantInfo?.name || user?.restaurantName || "GoEats"}
+        wifiSsid={restaurantInfo?.wifiSsid}
+        wifiPassword={restaurantInfo?.wifiPassword}
+      />
     </div>
   );
 };

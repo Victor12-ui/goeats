@@ -333,6 +333,9 @@ function App() {
             {/* Public Routes */}
             <Route path="/" element={<Aggregator />} />
             <Route path="/r/:slug" element={<PublicCatalog />} />
+            <Route path="/r/:slug/mesa/:tableId" element={<PublicCatalog />} />
+            <Route path="/qr/:slug/:tableId" element={<PublicCatalog />} />
+            <Route path="/qr/:slug" element={<PublicCatalog />} />
             <Route path="/login" element={<Auth />} />
             <Route path="/plus" element={<PlusPromo />} />
 

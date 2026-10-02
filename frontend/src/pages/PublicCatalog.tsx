@@ -73,7 +73,7 @@ interface CartItem {
 export const PublicCatalog: React.FC = () => {
   const { slug, tableId: urlTableId } = useParams();
   const [searchParams] = useSearchParams();
-  const queryTableId = searchParams.get("tableId");
+  const queryTableId = searchParams.get("tableId") || searchParams.get("table") || searchParams.get("mesa");
   const activeTableId = urlTableId || queryTableId; // Support both /qr/:slug/:tableId and query param
   const { isAuthenticated, user, logout } = useAuth();
   const navigate = useNavigate();
