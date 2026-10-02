@@ -349,21 +349,10 @@ export const SocialAuthModal: React.FC<SocialAuthModalProps> = ({
         {provider === "facebook" && (
           <div style={{ padding: "32px 28px 24px" }}>
             <div style={{ textAlign: "center", marginBottom: "20px" }}>
-              <div style={{
-                width: "48px",
-                height: "48px",
-                borderRadius: "50%",
-                backgroundColor: "#1877f2",
-                display: "inline-flex",
-                alignItems: "center",
-                justifyContent: "center",
-                color: "#ffffff",
-                fontSize: "28px",
-                fontWeight: "bold",
-                marginBottom: "12px"
-              }}>
-                f
-              </div>
+              <svg width="46" height="46" viewBox="0 0 24 24" style={{ marginBottom: "12px" }}>
+                <path fill="#1877F2" d="M24 12.073c0-6.627-5.373-12-12-12s-12 5.373-12 12c0 5.99 4.388 10.954 10.125 11.854v-8.385H7.078v-3.47h3.047V9.43c0-3.007 1.792-4.669 4.533-4.669 1.312 0 2.686.235 2.686.235v2.953H15.83c-1.491 0-1.956.925-1.956 1.874v2.25h3.328l-.532 3.47h-2.796v8.385C19.612 23.027 24 18.062 24 12.073z"/>
+                <path fill="#ffffff" d="M16.671 15.543l.532-3.47h-3.328v-2.25c0-.949.465-1.874 1.956-1.874h1.513V4.996s-1.374-.235-2.686-.235c-2.741 0-4.533 1.662-4.533 4.669v2.643H7.078v3.47h3.047v8.385a12.09 12.09 0 003.75 0v-8.385h2.796z"/>
+              </svg>
               <h2 style={{ fontSize: "20px", fontWeight: "600", margin: "0 0 4px", color: "#1c1e21" }}>
                 Iniciar sesión con Facebook
               </h2>
