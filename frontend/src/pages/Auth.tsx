@@ -1,10 +1,16 @@
-import React, { useState } from "react";
+import React, { useState, useEffect } from "react";
 import { useNavigate } from "react-router-dom";
 import { useAuth } from "../context/AuthContext";
 import { apiRequest } from "../utils/api";
 import { LogIn, UserPlus, Shield, Store, Mail, Lock, User as UserIcon, Link, ShoppingBag, Truck, ArrowLeft, Eye, EyeOff } from "lucide-react";
 import { SocialAuthModal } from "../components/SocialAuthModal";
 import { OnboardingProfileModal } from "../components/OnboardingProfileModal";
+
+declare global {
+  interface Window {
+    google?: any;
+  }
+}
 
 export const Auth: React.FC = () => {
   const [selectedRole, setSelectedRole] = useState<"customer" | "driver" | "restaurant" | "superadmin" | null>(null);
@@ -99,6 +105,60 @@ export const Auth: React.FC = () => {
 
     login(token, loggedUser);
     setOnboardingModalOpen(true);
+  };
+
+  // Google Identity Services (GIS) automatic prompt
+  useEffect(() => {
+    const clientId = (import.meta as any).env.VITE_GOOGLE_CLIENT_ID;
+    if (clientId && window.google?.accounts?.id) {
+      try {
+        window.google.accounts.id.initialize({
+          client_id: clientId,
+          callback: (response: any) => {
+            try {
+              const base64Url = response.credential.split(".")[1];
+              const base64 = base64Url.replace(/-/g, "+").replace(/_/g, "/");
+              const jsonPayload = decodeURIComponent(
+                atob(base64)
+                  .split("")
+                  .map((c) => "%" + ("00" + c.charCodeAt(0).toString(16)).slice(-2))
+                  .join("")
+              );
+              const payload = JSON.parse(jsonPayload);
+              const firstName = payload.given_name || payload.name?.split(" ")[0] || "Usuario";
+              const lastName = payload.family_name || payload.name?.split(" ").slice(1).join(" ") || "";
+
+              handleSocialSuccess({
+                name: payload.name || `${firstName} ${lastName}`.trim(),
+                firstName,
+                lastName,
+                email: payload.email,
+                avatar: payload.picture || "https://images.unsplash.com/photo-1534528741775-53994a69daeb?w=150",
+                provider: "google",
+              });
+            } catch (err) {
+              console.error("Error decodificando token de Google:", err);
+            }
+          },
+        });
+
+        if (selectedRole === "customer") {
+          window.google.accounts.id.prompt();
+        }
+      } catch (err) {
+        console.warn("Google GIS init error:", err);
+      }
+    }
+  }, [selectedRole]);
+
+  const handleGoogleClick = () => {
+    const clientId = (import.meta as any).env.VITE_GOOGLE_CLIENT_ID;
+    if (clientId && window.google?.accounts?.id) {
+      window.google.accounts.id.prompt();
+    } else {
+      setSocialProvider("google");
+      setSocialModalOpen(true);
+    }
   };
 
   const handleOnboardingSave = async (data: {
@@ -560,10 +620,7 @@ export const Auth: React.FC = () => {
                 {/* Google Button */}
                 <button
                   type="button"
-                  onClick={() => {
-                    setSocialProvider("google");
-                    setSocialModalOpen(true);
-                  }}
+                  onClick={handleGoogleClick}
                   style={{
                     display: "flex",
                     alignItems: "center",
