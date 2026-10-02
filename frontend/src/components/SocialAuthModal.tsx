@@ -21,8 +21,8 @@ export const SocialAuthModal: React.FC<SocialAuthModalProps> = ({
   onClose,
   onSuccess,
 }) => {
-  const [selectedEmail, setSelectedEmail] = useState("vmontano878@gmail.com");
-  const [customName, setCustomName] = useState("Victor Montaño");
+  const [selectedEmail, setSelectedEmail] = useState("usuario.demo@gmail.com");
+  const [customName, setCustomName] = useState("Juan Pérez");
   const [isCustomAccount, setIsCustomAccount] = useState(false);
   const [isLoading, setIsLoading] = useState(false);
 
@@ -33,8 +33,8 @@ export const SocialAuthModal: React.FC<SocialAuthModalProps> = ({
     setTimeout(() => {
       setIsLoading(false);
       const parts = customName.trim().split(" ");
-      const firstName = parts[0] || "Victor";
-      const lastName = parts.slice(1).join(" ") || "Montaño";
+      const firstName = parts[0] || "Juan";
+      const lastName = parts.slice(1).join(" ") || "Pérez";
       onSuccess({
         name: customName,
         firstName,
@@ -141,14 +141,14 @@ export const SocialAuthModal: React.FC<SocialAuthModalProps> = ({
                 fontWeight: "700",
                 fontSize: "18px",
               }}>
-                V
+                {(customName || "U")[0].toUpperCase()}
               </div>
               <div style={{ flex: 1, minWidth: 0 }}>
                 <div style={{ fontWeight: "600", fontSize: "14px", color: "#202124" }}>
-                  Victor Montaño
+                  {customName}
                 </div>
                 <div style={{ fontSize: "12px", color: "#5f6368", textOverflow: "ellipsis", overflow: "hidden" }}>
-                  vmontano878@gmail.com
+                  {selectedEmail}
                 </div>
               </div>
               {!isCustomAccount && <Check size={18} color="#1a73e8" />}
@@ -287,11 +287,11 @@ export const SocialAuthModal: React.FC<SocialAuthModalProps> = ({
             }}>
               <div style={{ display: "flex", justifyContent: "space-between", marginBottom: "12px", fontSize: "13px" }}>
                 <span style={{ color: "#a1a1aa" }}>Nombre:</span>
-                <span style={{ fontWeight: "600" }}>Victor Montaño</span>
+                <span style={{ fontWeight: "600" }}>{customName}</span>
               </div>
               <div style={{ display: "flex", justifyContent: "space-between", fontSize: "13px" }}>
                 <span style={{ color: "#a1a1aa" }}>Apple ID:</span>
-                <span style={{ fontWeight: "600" }}>vmontano878@icloud.com</span>
+                <span style={{ fontWeight: "600" }}>usuario@icloud.com</span>
               </div>
             </div>
 
@@ -381,10 +381,10 @@ export const SocialAuthModal: React.FC<SocialAuthModalProps> = ({
                 justifyContent: "center",
                 fontWeight: "bold"
               }}>
-                V
+                {(customName || "U")[0].toUpperCase()}
               </div>
               <div>
-                <div style={{ fontWeight: "600", fontSize: "14px" }}>Victor Montaño</div>
+                <div style={{ fontWeight: "600", fontSize: "14px" }}>{customName}</div>
                 <div style={{ fontSize: "12px", color: "#65676b" }}>Continuarás con esta cuenta de Facebook</div>
               </div>
             </div>
@@ -421,7 +421,7 @@ export const SocialAuthModal: React.FC<SocialAuthModalProps> = ({
                   cursor: "pointer",
                 }}
               >
-                {isLoading ? "Conectando..." : "Continuar como Victor"}
+                {isLoading ? "Conectando..." : `Continuar como ${customName.split(" ")[0] || "Usuario"}`}
               </button>
             </div>
           </div>

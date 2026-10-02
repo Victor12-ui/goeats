@@ -180,8 +180,8 @@ export const Auth: React.FC = () => {
 
         if (regType === "customer") {
           const parts = (name || "").trim().split(" ");
-          const firstName = parts[0] || name || "Victor";
-          const lastName = parts.slice(1).join(" ") || "Montaño";
+          const firstName = parts[0] || name || "";
+          const lastName = parts.slice(1).join(" ") || "";
           setProfileData({
             name: name || username,
             firstName,

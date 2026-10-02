@@ -46,9 +46,9 @@ export const OnboardingProfileModal: React.FC<OnboardingProfileModalProps> = ({
     setTimeout(() => {
       setIsSubmitting(false);
       onSave({
-        firstName: firstName || "Victor",
-        lastName: lastName || "Montaño",
-        birthDate: birthDate || "15/08/1995",
+        firstName: firstName.trim(),
+        lastName: lastName.trim(),
+        birthDate: birthDate.trim(),
         gender,
       });
     }, 400);
@@ -173,7 +173,7 @@ export const OnboardingProfileModal: React.FC<OnboardingProfileModalProps> = ({
                   required
                   value={firstName}
                   onChange={(e) => setFirstName(e.target.value)}
-                  placeholder="Ej: Victor"
+                  placeholder="Ej: Juan"
                   style={{
                     width: "100%",
                     border: "none",
@@ -210,7 +210,7 @@ export const OnboardingProfileModal: React.FC<OnboardingProfileModalProps> = ({
                   required
                   value={lastName}
                   onChange={(e) => setLastName(e.target.value)}
-                  placeholder="Ej: Montaño"
+                  placeholder="Ej: Pérez"
                   style={{
                     width: "100%",
                     border: "none",

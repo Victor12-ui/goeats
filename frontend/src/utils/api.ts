@@ -94,7 +94,7 @@ export async function apiRequest(endpoint: string, options: RequestOptions = {})
           reqBody = typeof options.body === "string" ? JSON.parse(options.body) : {};
         } catch (e) {}
 
-        const username = reqBody.username || (reqBody.email ? reqBody.email.split("@")[0] : "victor");
+        const username = reqBody.username || (reqBody.email ? reqBody.email.split("@")[0] : "usuario");
         const name = reqBody.name || username;
         return {
           success: true,
@@ -105,7 +105,7 @@ export async function apiRequest(endpoint: string, options: RequestOptions = {})
             name,
             email: reqBody.email || `${username}@gmail.com`,
             role: "CUSTOMER",
-            cedula: reqBody.cedula || "1105808529",
+            cedula: reqBody.cedula || "1700000000",
             walletBalance: 0,
             isPlus: false,
           }
