@@ -34,28 +34,22 @@ export const SocialAuthModal: React.FC<SocialAuthModalProps> = ({
 
   const googleAccounts = [
     {
-      name: "Victor Montaño",
-      email: "vmontano878@gmail.com",
+      name: "Cuenta Principal",
+      email: "usuario@ejemplo.com",
       avatarColor: "#e65100",
-      initial: "V",
+      initial: "U",
     },
     {
-      name: "victor montaño",
-      email: "montanovictor27@gmail.com",
+      name: "Cuenta Secundaria",
+      email: "contacto@ejemplo.com",
       avatarColor: "#00897b",
-      initial: "v",
+      initial: "C",
     },
     {
-      name: "Fulano X",
-      email: "xf4828783@gmail.com",
-      avatarColor: "#546e7a",
-      initial: "F",
-    },
-    {
-      name: "Steven Montaño",
-      email: "stevenneri100@gmail.com",
+      name: "Demo GoEats",
+      email: "demo@goeats.app",
       avatarColor: "#5c6bc0",
-      initial: "S",
+      initial: "D",
     },
   ];
 
@@ -106,10 +100,10 @@ export const SocialAuthModal: React.FC<SocialAuthModalProps> = ({
     setTimeout(() => {
       setIsLoading(false);
       onSuccess({
-        name: "Victor Montaño",
-        firstName: "Victor",
-        lastName: "Montaño",
-        email: "vmontano878@icloud.com",
+        name: "Usuario Apple",
+        firstName: "Usuario",
+        lastName: "Apple",
+        email: "usuario@icloud.com",
         avatar: "https://images.unsplash.com/photo-1507003211169-0a1dd7228f2d?w=150",
         provider: "apple",
       });
@@ -121,10 +115,10 @@ export const SocialAuthModal: React.FC<SocialAuthModalProps> = ({
     setTimeout(() => {
       setIsLoading(false);
       onSuccess({
-        name: "Victor Montaño",
-        firstName: "Victor",
-        lastName: "Montaño",
-        email: "vmontano878@gmail.com",
+        name: "Usuario Facebook",
+        firstName: "Usuario",
+        lastName: "Facebook",
+        email: "usuario@facebook.com",
         avatar: "https://images.unsplash.com/photo-1507003211169-0a1dd7228f2d?w=150",
         provider: "facebook",
       });
@@ -552,11 +546,11 @@ export const SocialAuthModal: React.FC<SocialAuthModalProps> = ({
           >
             <div style={{ display: "flex", justifyContent: "space-between", marginBottom: "12px", fontSize: "14px" }}>
               <span style={{ color: "#8e8e93" }}>Nombre:</span>
-              <span style={{ fontWeight: "600" }}>Victor Montaño</span>
+              <span style={{ fontWeight: "600" }}>Usuario Apple</span>
             </div>
             <div style={{ display: "flex", justifyContent: "space-between", fontSize: "14px" }}>
               <span style={{ color: "#8e8e93" }}>Apple ID:</span>
-              <span style={{ fontWeight: "600" }}>vmontano878@icloud.com</span>
+              <span style={{ fontWeight: "600" }}>usuario@icloud.com</span>
             </div>
           </div>
 
@@ -667,11 +661,11 @@ export const SocialAuthModal: React.FC<SocialAuthModalProps> = ({
                   fontSize: "18px",
                 }}
               >
-                V
+                U
               </div>
               <div>
-                <div style={{ fontWeight: "600", fontSize: "15px", color: "#050505" }}>Victor Montaño</div>
-                <div style={{ fontSize: "12px", color: "#65676b" }}>vmontano878@gmail.com</div>
+                <div style={{ fontWeight: "600", fontSize: "15px", color: "#050505" }}>Usuario Facebook</div>
+                <div style={{ fontSize: "12px", color: "#65676b" }}>usuario@facebook.com</div>
               </div>
             </div>
 
@@ -709,7 +703,7 @@ export const SocialAuthModal: React.FC<SocialAuthModalProps> = ({
                   cursor: "pointer",
                 }}
               >
-                {isLoading ? "Conectando..." : "Continuar como Victor"}
+                {isLoading ? "Conectando..." : "Continuar como Usuario"}
               </button>
             </div>
           </div>
