@@ -94,3 +94,62 @@ export async function sendInvoiceEmail(params: SendInvoiceEmailParams): Promise<
     return { success: false, error: error.message || error };
   }
 }
+
+export async function sendWelcomeEmail(params: {
+  to: string;
+  name: string;
+}): Promise<{ success: boolean; messageId?: string; error?: string }> {
+  const host = process.env.SMTP_HOST || "server3651.hostingsupremo.net";
+  const port = parseInt(process.env.SMTP_PORT || "465", 10);
+  const secure = process.env.SMTP_SECURE !== "false";
+  const user = process.env.SMTP_USER || "gerencia@guibis.com";
+  const pass = process.env.SMTP_PASS || "MACAra666_";
+  const fromName = process.env.SMTP_FROM_NAME || "GoEats Notificaciones";
+
+  try {
+    const transporter = nodemailer.createTransport({
+      host,
+      port,
+      secure,
+      auth: {
+        user,
+        pass,
+      },
+    });
+
+    const mailOptions = {
+      from: `"${fromName}" <${user}>`,
+      to: params.to,
+      subject: `🎉 ¡Bienvenido a GoEats, ${params.name}! Tu cuenta ha sido creada con éxito`,
+      html: `
+        <div style="font-family: 'Segoe UI', Arial, sans-serif; background-color: #f8fafc; padding: 30px 15px;">
+          <div style="max-width: 520px; margin: 0 auto; background-color: #ffffff; border-radius: 16px; overflow: hidden; box-shadow: 0 4px 12px rgba(0,0,0,0.06); border: 1px solid #e2e8f0;">
+            <div style="background: linear-gradient(135deg, #ff4757 0%, #ff6b81 100%); padding: 26px 20px; text-align: center; color: #ffffff;">
+              <h1 style="margin: 0; font-size: 26px; font-weight: 800;">Go<span style="color: #2f3542;">Eats</span></h1>
+              <p style="margin: 6px 0 0; font-size: 13px; opacity: 0.95;">Tu app de delivery y restaurantes</p>
+            </div>
+            <div style="padding: 28px 24px;">
+              <h2 style="margin: 0 0 8px; font-size: 19px; color: #0f172a;">¡Tu cuenta ha sido creada con éxito!</h2>
+              <p style="margin: 0; font-size: 14px; color: #475569;">Hola <strong>${params.name}</strong>, bienvenido a GoEats.</p>
+              
+              <div style="background-color: #fff1f2; border: 1.5px dashed #fecdd3; border-radius: 12px; padding: 16px; margin: 20px 0; text-align: center;">
+                <div style="font-size: 11px; font-weight: 700; color: #e11d48; text-transform: uppercase;">CUPÓN DE BIENVENIDA (15% OFF)</div>
+                <div style="font-size: 20px; font-weight: 800; color: #881337; margin-top: 4px;">BIENVENIDO15</div>
+                <div style="font-size: 11px; color: #9f1239; margin-top: 2px;">Válido en tu primer pedido a domicilio o escaneando el QR en mesa.</div>
+              </div>
+
+              <p style="font-size: 13px; color: #64748b; line-height: 1.5;">Ya puedes pedir de tus restaurantes favoritos en tiempo real y disfrutar de envíos rápidos.</p>
+            </div>
+          </div>
+        </div>
+      `,
+    };
+
+    const info = await transporter.sendMail(mailOptions);
+    console.log(`[Email] Correo de bienvenida enviado a ${params.to}: ${info.messageId}`);
+    return { success: true, messageId: info.messageId };
+  } catch (error: any) {
+    console.warn("[Email] Notificación de correo:", error.message || error);
+    return { success: false, error: error.message || error };
+  }
+}

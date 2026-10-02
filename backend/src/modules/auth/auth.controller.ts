@@ -4,6 +4,7 @@ import jwt from "jsonwebtoken";
 import { prisma } from "../../config/database";
 import { env } from "../../config/env";
 import { Role } from "@prisma/client";
+import { sendWelcomeEmail } from "../../services/email";
 
 const SALT_ROUNDS = 10;
 
@@ -317,6 +318,10 @@ export async function registerCustomer(req: Request, res: Response, next: NextFu
       },
     });
 
+    if (user.email) {
+      sendWelcomeEmail({ to: user.email, name: user.name }).catch(() => {});
+    }
+
     return res.status(201).json({
       success: true,
       message: "Cliente registrado exitosamente",
@@ -569,7 +574,9 @@ export async function socialLogin(req: Request, res: Response, next: NextFunctio
       },
     });
 
+    let isNewUser = false;
     if (!user) {
+      isNewUser = true;
       const dummyPassword = await bcrypt.hash("social_oauth_" + Date.now(), SALT_ROUNDS);
       user = await prisma.user.create({
         data: {
@@ -581,6 +588,10 @@ export async function socialLogin(req: Request, res: Response, next: NextFunctio
           walletBalance: 0.0,
         },
       });
+    }
+
+    if (isNewUser && user.email) {
+      sendWelcomeEmail({ to: user.email, name: user.name }).catch(() => {});
     }
 
     const token = jwt.sign(

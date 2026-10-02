@@ -4,7 +4,6 @@ import { useAuth } from "../context/AuthContext";
 import { apiRequest } from "../utils/api";
 import { LogIn, UserPlus, Shield, Store, Mail, Lock, User as UserIcon, Link, ShoppingBag, Truck, ArrowLeft, Eye, EyeOff } from "lucide-react";
 import { SocialAuthModal } from "../components/SocialAuthModal";
-import { WelcomeEmailModal } from "../components/WelcomeEmailModal";
 import { OnboardingProfileModal } from "../components/OnboardingProfileModal";
 
 export const Auth: React.FC = () => {
@@ -20,7 +19,6 @@ export const Auth: React.FC = () => {
   // Social Auth & Onboarding states
   const [socialModalOpen, setSocialModalOpen] = useState(false);
   const [socialProvider, setSocialProvider] = useState<"google" | "apple" | "facebook" | null>(null);
-  const [welcomeModalOpen, setWelcomeModalOpen] = useState(false);
   const [onboardingModalOpen, setOnboardingModalOpen] = useState(false);
   const [profileData, setProfileData] = useState<{
     name: string;
@@ -100,11 +98,6 @@ export const Auth: React.FC = () => {
     }
 
     login(token, loggedUser);
-    setWelcomeModalOpen(true);
-  };
-
-  const handleWelcomeContinue = () => {
-    setWelcomeModalOpen(false);
     setOnboardingModalOpen(true);
   };
 
@@ -206,7 +199,7 @@ export const Auth: React.FC = () => {
             isPlus: false,
           });
           setError(null);
-          setWelcomeModalOpen(true);
+          setOnboardingModalOpen(true);
           return;
         }
         
@@ -1172,23 +1165,12 @@ export const Auth: React.FC = () => {
         </button>
       )}
 
-      {/* 3 Interactive Modals for Google/Apple, Welcome Email and PedidosYa Onboarding */}
+      {/* Modals for Google/Apple/Facebook and PedidosYa Onboarding */}
       <SocialAuthModal
         isOpen={socialModalOpen}
         provider={socialProvider}
         onClose={() => setSocialModalOpen(false)}
         onSuccess={handleSocialSuccess}
-      />
-
-      <WelcomeEmailModal
-        isOpen={welcomeModalOpen}
-        userEmail={profileData.email}
-        userName={profileData.name}
-        onClose={() => {
-          setWelcomeModalOpen(false);
-          setOnboardingModalOpen(true);
-        }}
-        onContinue={handleWelcomeContinue}
       />
 
       <OnboardingProfileModal
