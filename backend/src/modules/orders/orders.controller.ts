@@ -11,7 +11,7 @@ export async function createOrder(req: Request, res: Response, next: NextFunctio
       return res.status(400).json({ success: false, message: "Restaurant context and user auth required" });
     }
 
-    const { type, tableId, customerName, comments, items, deliveryAddress, deliveryPhone, shippingCost } = req.body;
+    const { type, tableId, customerName, comments, items, deliveryAddress, deliveryReference, deliveryObservation, deliveryPhone, shippingCost } = req.body;
 
     if (!type || !customerName || !Array.isArray(items) || items.length === 0) {
       return res.status(400).json({ success: false, message: "Type, customerName, and non-empty items are required" });
@@ -82,7 +82,12 @@ export async function createOrder(req: Request, res: Response, next: NextFunctio
           comments,
           shippingCost: costEnvio,
           total: calculatedTotal + costEnvio,
-          deliveryAddress: type === OrderType.DELIVERY ? deliveryAddress : null,
+          deliveryAddress: type === OrderType.DELIVERY 
+            ? (deliveryReference && !deliveryAddress?.includes("Ref:") ? `${deliveryAddress} (Ref: ${deliveryReference})` : deliveryAddress)
+            : null,
+          deliveryObservation: type === OrderType.DELIVERY 
+            ? (deliveryReference || deliveryObservation || null)
+            : null,
           deliveryPhone: type === OrderType.DELIVERY ? deliveryPhone : null,
           restaurantId,
           items: {

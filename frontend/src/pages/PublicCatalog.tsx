@@ -100,6 +100,7 @@ export const PublicCatalog: React.FC = () => {
   const [selectedTable, setSelectedTable] = useState<string>("");
   const [customerName, setCustomerName] = useState("");
   const [deliveryAddress, setDeliveryAddress] = useState("");
+  const [deliveryReference, setDeliveryReference] = useState("");
   const [deliveryPhone, setDeliveryPhone] = useState("");
   const [deliveryLat, setDeliveryLat] = useState<number | null>(null);
   const [deliveryLng, setDeliveryLng] = useState<number | null>(null);
@@ -338,8 +339,12 @@ export const PublicCatalog: React.FC = () => {
         type: orderType,
         tableId: orderType === "DINE_IN" ? parseInt(selectedTable, 10) : null,
         customerName,
-        comments: `Pedido público web. Para Llevar. Distancia estimada: ${simulatedDistance.toFixed(1)} km. Pago: ${paymentMethod === "CASH" ? "Efectivo/Contraentrega" : paymentMethod === "CARD" ? "Tarjeta" : "Transferencia"}`,
-        deliveryAddress: orderType === "DELIVERY" ? deliveryAddress : null,
+        comments: `Pedido público web. ${orderType === "DELIVERY" ? "A Domicilio" : orderType === "TAKEOUT" ? "Para Llevar" : "En Mesa"}. Distancia: ${simulatedDistance.toFixed(1)} km. Pago: ${paymentMethod === "CASH" ? "Efectivo/Contraentrega" : paymentMethod === "CARD" ? "Tarjeta" : "Transferencia"}${deliveryReference ? ` • Referencia: ${deliveryReference}` : ""}`,
+        deliveryAddress: orderType === "DELIVERY" 
+          ? (deliveryReference ? `${deliveryAddress} (Ref: ${deliveryReference})` : deliveryAddress)
+          : null,
+        deliveryReference: orderType === "DELIVERY" ? deliveryReference : null,
+        deliveryObservation: orderType === "DELIVERY" ? deliveryReference : null,
         deliveryPhone: orderType === "DELIVERY" ? deliveryPhone : null,
         deliveryLat: orderType === "DELIVERY" ? deliveryLat : null,
         deliveryLng: orderType === "DELIVERY" ? deliveryLng : null,
@@ -869,6 +874,9 @@ export const PublicCatalog: React.FC = () => {
                 {/* DETALLES DE ENTREGA */}
                 <div style={{ background: "rgba(0,0,0,0.02)", borderRadius: "12px", padding: "16px", margin: "20px 0", fontSize: "0.9rem", display: "flex", flexDirection: "column", gap: "8px" }}>
                   <div><strong>Destino:</strong> {activeOrder?.deliveryAddress || deliveryAddress || "Dirección indicada"}</div>
+                  {(activeOrder?.deliveryObservation || deliveryReference) && (
+                    <div><strong>Referencia:</strong> {activeOrder?.deliveryObservation || deliveryReference}</div>
+                  )}
                   <div><strong>Total:</strong> ${Number(activeOrder?.total || 0).toFixed(2)} ({activeOrder?.paymentMethodString === "CASH" ? "Efectivo contraentrega" : "Pagado digitalmente"})</div>
                   <div><strong>Repartidor:</strong> {activeOrder?.deliveryDriverName || "Buscando repartidor cercano..."}</div>
                 </div>
@@ -1112,6 +1120,10 @@ export const PublicCatalog: React.FC = () => {
                         <div className="input-group">
                           <label>Dirección de Envío (Edita o agrega detalles)</label>
                           <input type="text" className="input-field" required={orderType === "DELIVERY"} value={deliveryAddress} onChange={(e) => setDeliveryAddress(e.target.value)} placeholder="Ej: Calle 24 de Mayo y Mercadillo, Barrio Central" />
+                        </div>
+                        <div className="input-group">
+                          <label>Referencia de Entrega (Opcional)</label>
+                          <input type="text" className="input-field" value={deliveryReference} onChange={(e) => setDeliveryReference(e.target.value)} placeholder="Ej: Casa blanca de 2 pisos, portón negro, timbre 3" />
                         </div>
                         <div className="input-group">
                           <label>Teléfono de Contacto</label>

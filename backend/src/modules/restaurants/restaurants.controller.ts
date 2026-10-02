@@ -235,6 +235,8 @@ export async function createPublicOrder(req: Request, res: Response, next: NextF
       comments, 
       items, 
       deliveryAddress, 
+      deliveryReference,
+      deliveryObservation,
       deliveryPhone, 
       deliveryLat, 
       deliveryLng, 
@@ -371,7 +373,12 @@ export async function createPublicOrder(req: Request, res: Response, next: NextF
           comments,
           shippingCost: costEnvio,
           total: calculatedTotal + costEnvio,
-          deliveryAddress: typeEnum === OrderType.DELIVERY ? deliveryAddress : null,
+          deliveryAddress: typeEnum === OrderType.DELIVERY 
+            ? (deliveryReference && !deliveryAddress?.includes("Ref:") ? `${deliveryAddress} (Ref: ${deliveryReference})` : deliveryAddress)
+            : null,
+          deliveryObservation: typeEnum === OrderType.DELIVERY 
+            ? (deliveryReference || deliveryObservation || null)
+            : null,
           deliveryPhone: typeEnum === OrderType.DELIVERY ? deliveryPhone : null,
           deliveryLat: (typeEnum === OrderType.DELIVERY && deliveryLat) ? parseFloat(deliveryLat) : null,
           deliveryLng: (typeEnum === OrderType.DELIVERY && deliveryLng) ? parseFloat(deliveryLng) : null,

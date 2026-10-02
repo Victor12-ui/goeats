@@ -111,6 +111,7 @@ export const POS: React.FC = () => {
   const [customerName, setCustomerName] = useState("Varios");
   const [orderComments, setOrderComments] = useState("");
   const [deliveryAddress, setDeliveryAddress] = useState("");
+  const [deliveryReference, setDeliveryReference] = useState("");
   const [deliveryPhone, setDeliveryPhone] = useState("");
   const [activeOrderId, setActiveOrderId] = useState<number | null>(null);
   const [activeMobileTab, setActiveMobileTab] = useState<"menu" | "tables" | "cart">("menu");
@@ -510,6 +511,7 @@ export const POS: React.FC = () => {
     setOrderType(order.type);
     setOrderComments(order.comments || "");
     setDeliveryAddress(order.deliveryAddress || "");
+    setDeliveryReference(order.deliveryObservation || "");
     setDeliveryPhone(order.deliveryPhone || "");
     
     const formattedCart = order.items.map((item: any) => ({
@@ -632,7 +634,11 @@ export const POS: React.FC = () => {
         type: orderType,
         customerName,
         comments: orderComments,
-        deliveryAddress: orderType === "DELIVERY" ? deliveryAddress : undefined,
+        deliveryAddress: orderType === "DELIVERY"
+          ? (deliveryReference ? `${deliveryAddress} (Ref: ${deliveryReference})` : deliveryAddress)
+          : undefined,
+        deliveryReference: orderType === "DELIVERY" ? deliveryReference : undefined,
+        deliveryObservation: orderType === "DELIVERY" ? deliveryReference : undefined,
         deliveryPhone: orderType === "DELIVERY" ? deliveryPhone : undefined,
         tableId: orderType === "DINE_IN" ? selectedTable?.id : undefined,
         items: cart.map(i => ({
@@ -661,6 +667,9 @@ export const POS: React.FC = () => {
       setCart([]);
       setSelectedTable(null);
       setActiveOrderId(null);
+      setDeliveryAddress("");
+      setDeliveryReference("");
+      setDeliveryPhone("");
       loadInitialData(); // Refresh table layout
     } catch (error: any) {
       alert(error.message || "Error al procesar el pedido");
@@ -1943,6 +1952,17 @@ export const POS: React.FC = () => {
                   placeholder="Calle y Nro"
                   value={deliveryAddress}
                   onChange={(e) => setDeliveryAddress(e.target.value)}
+                />
+              </div>
+              <div className="input-group" style={{ marginBottom: 0, gap: "4px" }}>
+                <label style={{ fontSize: "11px", color: "var(--text-muted)" }}>Referencia de Entrega (Opcional)</label>
+                <input
+                  type="text"
+                  className="input-field"
+                  style={{ padding: "8px 12px", fontSize: "13px" }}
+                  placeholder="Ej: Frente al parque, casa blanca"
+                  value={deliveryReference}
+                  onChange={(e) => setDeliveryReference(e.target.value)}
                 />
               </div>
               <div className="input-group" style={{ marginBottom: 0, gap: "4px" }}>
