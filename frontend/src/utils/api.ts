@@ -1,5 +1,6 @@
+const envApiUrl = (import.meta as any).env?.VITE_API_URL;
 const hostname = typeof window !== "undefined" && window.location.hostname ? window.location.hostname : "localhost";
-const BASE_URL = `http://${hostname}:5000/api`;
+const BASE_URL = envApiUrl ? envApiUrl.replace(/\/$/, "") : `http://${hostname}:5000/api`;
 
 interface RequestOptions extends RequestInit {
   params?: Record<string, string>;

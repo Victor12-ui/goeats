@@ -241,14 +241,10 @@ export const PublicCatalog: React.FC = () => {
     }
     setWaiterCallLoading(true);
     try {
-      const hostname = window.location.hostname || "localhost";
-      const res = await fetch(`http://${hostname}:5000/api/restaurants/public/catalog/${slug}/call-waiter`, {
+      await apiRequest(`/restaurants/public/catalog/${slug}/call-waiter`, {
         method: "POST",
-        headers: { "Content-Type": "application/json" },
         body: JSON.stringify({ tableId: selectedTable, action }),
       });
-      const data = await res.json();
-      if (!res.ok) throw new Error(data.message || "Error al comunicarse con el mesero");
       setWaiterCallStatus(action === "BILL" ? "🧾 ¡Cuenta solicitada a caja! Enseguida se acercan a cobrar." : "🛎️ ¡Mesero notificado! Enseguida se acerca a tu mesa.");
       setTimeout(() => setWaiterCallStatus(null), 8000);
     } catch (err: any) {
@@ -360,21 +356,12 @@ export const PublicCatalog: React.FC = () => {
         payphoneTransactionId: paymentMethod === "CARD" ? payphoneTransactionId : undefined,
       };
 
-      const headers: any = { "Content-Type": "application/json" };
-      const token = localStorage.getItem("goeats_token");
-      if (token) {
-        headers["Authorization"] = `Bearer ${token}`;
-      }
-
       // Call public endpoint
-      const hostname = window.location.hostname || "localhost";
-      const res = await fetch(`http://${hostname}:5000/api/restaurants/public/catalog/${slug}/order`, {
+      const data = await apiRequest(`/restaurants/public/catalog/${slug}/order`, {
         method: "POST",
-        headers,
         body: JSON.stringify(payload),
       });
 
-      const data = await res.json();
       setActiveOrder(data.order || { ...payload, id: Date.now(), status: "PREPARING" });
 
       setCart([]);
