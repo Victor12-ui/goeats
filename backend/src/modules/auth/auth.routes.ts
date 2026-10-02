@@ -9,7 +9,9 @@ import {
   resetDatabase,
   getStaff,
   updateStaff,
-  deleteStaff
+  deleteStaff,
+  socialLogin,
+  completeProfile,
 } from "./auth.controller";
 import { authMiddleware } from "../../middlewares/auth";
 import { tenantMiddleware } from "../../middlewares/tenant";
@@ -19,6 +21,8 @@ import { Role } from "@prisma/client";
 const router = Router();
 
 router.post("/login", login);
+router.post("/social-login", socialLogin);
+router.post("/complete-profile", completeProfile);
 router.post("/register-owner", registerOwner);
 router.post("/register-customer", registerCustomer);
 router.post("/register-driver", registerDriver);

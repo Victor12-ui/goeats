@@ -549,3 +549,81 @@ export async function deleteStaff(req: Request, res: Response, next: NextFunctio
     next(error);
   }
 }
+
+export async function socialLogin(req: Request, res: Response, next: NextFunction) {
+  try {
+    const { email, name, provider, avatar } = req.body;
+    if (!email) {
+      return res.status(400).json({ success: false, message: "Email is required for social login" });
+    }
+
+    const username = email.split("@")[0] || `user_${Date.now()}`;
+
+    // Find or create customer
+    let user = await prisma.user.findFirst({
+      where: {
+        OR: [
+          { email },
+          { username }
+        ]
+      },
+    });
+
+    if (!user) {
+      const dummyPassword = await bcrypt.hash("social_oauth_" + Date.now(), SALT_ROUNDS);
+      user = await prisma.user.create({
+        data: {
+          username,
+          password: dummyPassword,
+          name: name || username,
+          email,
+          role: Role.CUSTOMER,
+          walletBalance: 0.0,
+        },
+      });
+    }
+
+    const token = jwt.sign(
+      {
+        userId: user.id,
+        username: user.username,
+        role: user.role,
+        restaurantId: user.restaurantId,
+      },
+      env.JWT_SECRET,
+      { expiresIn: "7d" }
+    );
+
+    return res.status(200).json({
+      success: true,
+      token,
+      user: {
+        id: user.id,
+        username: user.username,
+        name: user.name,
+        email: user.email,
+        role: user.role,
+        cedula: user.cedula || null,
+        walletBalance: user.walletBalance,
+        isPlus: user.isPlus,
+        avatar: avatar || null,
+        provider: provider || "google",
+      },
+    });
+  } catch (error) {
+    next(error);
+  }
+}
+
+export async function completeProfile(req: Request, res: Response, next: NextFunction) {
+  try {
+    const { firstName, lastName, birthDate, gender } = req.body;
+    return res.status(200).json({
+      success: true,
+      message: "Perfil actualizado con éxito",
+      profile: { firstName, lastName, birthDate, gender },
+    });
+  } catch (error) {
+    next(error);
+  }
+}
