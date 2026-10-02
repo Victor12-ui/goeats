@@ -1,0 +1,9 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 200 200" width="100%" height="100%">
+  <rect width="200" height="200" rx="24" fill="#1A1A1A"/>
+  <circle cx="100" cy="70" r="42" fill="#E53935"/>
+  <circle cx="100" cy="70" r="28" fill="#FFFFFF"/>
+  <circle cx="100" cy="70" r="16" fill="#1A1A1A"/>
+  <circle cx="100" cy="70" r="8" fill="#FF9800"/>
+  <text x="100" y="140" font-family="'Arial Black', sans-serif" font-weight="900" font-size="16" fill="#FFFFFF" text-anchor="middle" letter-spacing="3">SUSHI TOKYO</text>
+  <text x="100" y="165" font-family="sans-serif" font-weight="700" font-size="12" fill="#E53935" text-anchor="middle" letter-spacing="4">EXPRESS</text>
+</svg>

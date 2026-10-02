@@ -1,0 +1,1412 @@
+import React, { useEffect, useState } from "react";
+import { useParams, useSearchParams, useNavigate, Link } from "react-router-dom";
+import { apiRequest } from "../utils/api";
+import { ShoppingCart, Wifi, MapPin, Phone, Utensils, Check, Plus, Minus, AlertCircle, Clock, X, ArrowLeft } from "lucide-react";
+import { useAuth } from "../context/AuthContext";
+import { LocationPickerMap } from "../components/LocationPickerMap";
+
+interface Variant {
+  id: number;
+  name: string;
+  price: number;
+  stockLimit: number | null;
+  options: string | null;
+}
+
+interface MenuItem {
+  id: number;
+  name: string;
+  description: string | null;
+  image: string | null;
+  variants: Variant[];
+}
+
+interface Category {
+  id: number;
+  name: string;
+  description: string | null;
+  items: MenuItem[];
+}
+
+interface Table {
+  id: number;
+  number: string;
+  status: string;
+}
+
+interface DiningArea {
+  id: number;
+  name: string;
+  tables: Table[];
+}
+
+interface RestaurantDetails {
+  id: number;
+  name: string;
+  slug: string;
+  logo: string | null;
+  address: string | null;
+  phone: string | null;
+  wifiSsid: string | null;
+  wifiPassword: string | null;
+  qrOrderingEnabled: boolean;
+  coverImage: string | null;
+  description: string | null;
+  mapLatitude: number | null;
+  mapLongitude: number | null;
+  mapIframe: string | null;
+  reference: string | null;
+  openingHours: string | null;
+  faqsJson: string | null;
+}
+
+interface CartItem {
+  variantId: number;
+  name: string;
+  itemName: string;
+  price: number;
+  quantity: number;
+  comments: string;
+}
+
+export const PublicCatalog: React.FC = () => {
+  const { slug, tableId: urlTableId } = useParams();
+  const [searchParams] = useSearchParams();
+  const queryTableId = searchParams.get("tableId");
+  const activeTableId = urlTableId || queryTableId; // Support both /qr/:slug/:tableId and query param
+  const { isAuthenticated, user, logout } = useAuth();
+  const navigate = useNavigate();
+
+  const [isMobile, setIsMobile] = useState(window.innerWidth < 768);
+
+  useEffect(() => {
+    const handleResize = () => {
+      setIsMobile(window.innerWidth < 768);
+    };
+    window.addEventListener("resize", handleResize);
+    return () => window.removeEventListener("resize", handleResize);
+  }, []);
+
+  const [restaurant, setRestaurant] = useState<RestaurantDetails | null>(null);
+  const [categories, setCategories] = useState<Category[]>([]);
+  const [diningAreas, setDiningAreas] = useState<DiningArea[]>([]);
+  
+  const [loading, setLoading] = useState(true);
+  const [error, setError] = useState<string | null>(null);
+  
+  // Checkout states
+  const [orderType, setOrderType] = useState<"DINE_IN" | "DELIVERY" | "TAKEOUT">("DELIVERY");
+  const [selectedTable, setSelectedTable] = useState<string>("");
+  const [customerName, setCustomerName] = useState("");
+  const [deliveryAddress, setDeliveryAddress] = useState("");
+  const [deliveryPhone, setDeliveryPhone] = useState("");
+  const [deliveryLat, setDeliveryLat] = useState<number | null>(null);
+  const [deliveryLng, setDeliveryLng] = useState<number | null>(null);
+  const [cart, setCart] = useState<CartItem[]>([]);
+  const [orderSuccess, setOrderSuccess] = useState<boolean>(false);
+  const [submitting, setSubmitting] = useState(false);
+  const [isCartMobileOpen, setIsCartMobileOpen] = useState(false);
+
+  // Delivery estimation states
+  const [deliveryRate, setDeliveryRate] = useState<any>(null);
+  const [simulatedDistance, setSimulatedDistance] = useState<number>(2.5); // Default 2.5 km
+
+  // Payment states for DELIVERY/TAKEOUT
+  const [paymentMethod, setPaymentMethod] = useState<"CASH" | "CARD" | "TRANSFER">("CASH");
+  const [paymentReceipt, setPaymentReceipt] = useState<string>("");
+  const [payphoneTransactionId, setPayphoneTransactionId] = useState<string>("");
+  const [showPayphoneSimulator, setShowPayphoneSimulator] = useState(false);
+  const [bankAccounts, setBankAccounts] = useState<any[]>([]);
+  const [selectedBankAccId, setSelectedBankAccId] = useState<string>("");
+  const [openFaqIndex, setOpenFaqIndex] = useState<number | null>(null);
+
+  const isPlusUser = isAuthenticated && user?.isPlus === true;
+  const currentShippingCost = (orderType === "DELIVERY" && !isPlusUser)
+    ? (deliveryRate ? deliveryRate.basePrice + (deliveryRate.pricePerKm * simulatedDistance) : 1.0 + (0.5 * simulatedDistance))
+    : 0;
+
+  const defaultMockBankAccount = {
+    id: "mock-1",
+    bank: "Banco Pichincha (Demo)",
+    ownerName: "Goeats S.A. (Demo)",
+    accountType: "ahorros",
+    accountNumber: "2209876543",
+    ownerDoc: "1792345678001",
+    ownerEmail: "pagos@goeats.com.ec",
+    qrImage: "https://upload.wikimedia.org/wikipedia/commons/d/d0/QR_code_for_mobile_English_Wikipedia.svg"
+  };
+
+  const activeBankAccounts = bankAccounts.length > 0 ? bankAccounts : [defaultMockBankAccount];
+
+  useEffect(() => {
+    if (restaurant && (restaurant as any).bankAccountsJson) {
+      try {
+        const parsed = JSON.parse((restaurant as any).bankAccountsJson);
+        setBankAccounts(parsed || []);
+        if (parsed && parsed.length > 0) {
+          setSelectedBankAccId(parsed[0].id.toString());
+        } else {
+          setSelectedBankAccId("mock-1");
+        }
+      } catch (e) {
+        setBankAccounts([]);
+        setSelectedBankAccId("mock-1");
+      }
+    } else {
+      setSelectedBankAccId("mock-1");
+    }
+  }, [restaurant]);
+
+
+  useEffect(() => {
+    async function loadCatalog() {
+      try {
+        const res = await apiRequest(`/restaurants/public/catalog/${slug}`);
+        setRestaurant(res.restaurant);
+        setCategories(res.menuCategories || []);
+        setDiningAreas(res.diningAreas || []);
+
+        // Auto-configure DINE_IN if table is provided via QR scan
+        if (activeTableId) {
+          setOrderType("DINE_IN");
+          setSelectedTable(activeTableId);
+        }
+      } catch (err: any) {
+        setError(err.message || "Error al cargar el menú");
+      } finally {
+        setLoading(false);
+      }
+    }
+    loadCatalog();
+  }, [slug, activeTableId]);
+
+  // Prefill customer name if logged in
+  useEffect(() => {
+    if (isAuthenticated && user) {
+      setCustomerName(user.name);
+    }
+  }, [isAuthenticated, user]);
+
+  // Load active delivery rates
+  useEffect(() => {
+    async function fetchActiveRate() {
+      if (isAuthenticated && orderType === "DELIVERY") {
+        try {
+          const res = await apiRequest("/delivery/active-rate");
+          if (res.success) {
+            setDeliveryRate(res.rate);
+          }
+        } catch (err) {
+          console.error("Error fetching active rate config:", err);
+        }
+      }
+    }
+    fetchActiveRate();
+  }, [isAuthenticated, orderType]);
+
+  const addToCart = (variant: Variant, item: MenuItem) => {
+    const existingIndex = cart.findIndex((c) => c.variantId === variant.id);
+    if (existingIndex > -1) {
+      const updated = [...cart];
+      updated[existingIndex].quantity += 1;
+      setCart(updated);
+    } else {
+      setCart([
+        ...cart,
+        {
+          variantId: variant.id,
+          name: variant.name,
+          itemName: item.name,
+          price: variant.price,
+          quantity: 1,
+          comments: "",
+        },
+      ]);
+    }
+  };
+
+  const updateQuantity = (variantId: number, val: number) => {
+    const existingIndex = cart.findIndex((c) => c.variantId === variantId);
+    if (existingIndex > -1) {
+      const updated = [...cart];
+      updated[existingIndex].quantity += val;
+      if (updated[existingIndex].quantity <= 0) {
+        updated.splice(existingIndex, 1);
+      }
+      setCart(updated);
+    }
+  };
+
+  const getCartTotal = () => {
+    return cart.reduce((sum, item) => sum + item.price * item.quantity, 0);
+  };
+
+  const handleCheckout = async (e: React.FormEvent) => {
+    e.preventDefault();
+    if (cart.length === 0) return;
+
+    if ((orderType === "DELIVERY" || orderType === "TAKEOUT") && !isAuthenticated) {
+      alert("Debes iniciar sesión para realizar pedidos.");
+      navigate("/login");
+      return;
+    }
+
+    if (!customerName) {
+      alert("Por favor ingresa tu nombre");
+      return;
+    }
+
+    if (orderType === "DELIVERY" && (!deliveryAddress || !deliveryPhone)) {
+      alert("Por favor ingresa dirección y teléfono para el envío");
+      return;
+    }
+
+    if (orderType === "DINE_IN" && !selectedTable) {
+      alert("Por favor selecciona una mesa");
+      return;
+    }
+
+    if (orderType !== "DINE_IN") {
+      if (paymentMethod === "TRANSFER" && !paymentReceipt) {
+        alert("Por favor sube la foto de tu comprobante de transferencia.");
+        return;
+      }
+      if (paymentMethod === "CARD" && !payphoneTransactionId) {
+        alert("Por favor realiza el pago con tarjeta (Payphone) antes de confirmar el pedido.");
+        return;
+      }
+    }
+
+    const shippingCost = currentShippingCost;
+
+    setSubmitting(true);
+    try {
+      const payload = {
+        type: orderType,
+        tableId: orderType === "DINE_IN" ? parseInt(selectedTable, 10) : null,
+        customerName,
+        comments: `Pedido público web. Para Llevar. Distancia estimada: ${simulatedDistance.toFixed(1)} km. Pago: ${paymentMethod === "CASH" ? "Efectivo/Contraentrega" : paymentMethod === "CARD" ? "Tarjeta" : "Transferencia"}`,
+        deliveryAddress: orderType === "DELIVERY" ? deliveryAddress : null,
+        deliveryPhone: orderType === "DELIVERY" ? deliveryPhone : null,
+        deliveryLat: orderType === "DELIVERY" ? deliveryLat : null,
+        deliveryLng: orderType === "DELIVERY" ? deliveryLng : null,
+        shippingCost,
+        items: cart.map((i) => ({
+          variantId: i.variantId,
+          quantity: i.quantity,
+          comments: i.comments,
+        })),
+        restaurantId: restaurant?.id,
+        paymentMethod,
+        paymentReceipt: paymentMethod === "TRANSFER" ? paymentReceipt : undefined,
+        payphoneTransactionId: paymentMethod === "CARD" ? payphoneTransactionId : undefined,
+      };
+
+      const headers: any = { "Content-Type": "application/json" };
+      const token = localStorage.getItem("goeats_token");
+      if (token) {
+        headers["Authorization"] = `Bearer ${token}`;
+      }
+
+      // Call public endpoint
+      const res = await fetch(`http://localhost:5000/api/restaurants/public/catalog/${slug}/order`, {
+        method: "POST",
+        headers,
+        body: JSON.stringify(payload),
+      });
+
+      if (!res.ok) {
+        const errorData = await res.json().catch(() => ({}));
+        throw new Error(errorData.message || "Error al enviar el pedido");
+      }
+
+      setCart([]);
+      setOrderSuccess(true);
+      setIsCartMobileOpen(false);
+    } catch (err: any) {
+      alert("Error al enviar el pedido: " + err.message);
+    } finally {
+      setSubmitting(false);
+    }
+  };
+
+  if (loading) {
+    return (
+      <div style={{ minHeight: "100vh", display: "flex", alignItems: "center", justifyContent: "center", background: "var(--bg-primary)" }}>
+        <div className="skeleton" style={{ width: "300px", height: "100px", borderRadius: "var(--radius-lg)" }} />
+      </div>
+    );
+  }
+
+  if (error || !restaurant) {
+    return (
+      <div style={{ minHeight: "100vh", padding: "40px", display: "flex", alignItems: "center", justifyContent: "center", background: "var(--bg-primary)" }}>
+        <div className="glass-card" style={{ padding: "30px", textAlign: "center", color: "var(--accent-primary)" }}>
+          <AlertCircle size={40} style={{ marginBottom: "15px" }} />
+          <p>{error || "Restaurante no encontrado"}</p>
+        </div>
+      </div>
+    );
+  }
+
+  return (
+    <div style={{ minHeight: "100vh", background: "var(--bg-primary)" }}>
+      {/* Stick Header Navigation style UberEats */}
+      <nav style={{
+        position: "sticky",
+        top: 0,
+        backgroundColor: "#ffffff",
+        borderBottom: "1px solid #e2e8f0",
+        zIndex: 1000,
+        padding: isMobile ? "10px 15px" : "15px 30px",
+        display: "flex",
+        justifyContent: "space-between",
+        alignItems: "center",
+        marginBottom: "1px"
+      }}>
+        <div style={{ display: "flex", alignItems: "center", gap: isMobile ? "10px" : "20px", flex: 1 }}>
+          <button 
+            onClick={() => navigate("/")}
+            style={{
+              display: "flex",
+              alignItems: "center",
+              gap: "6px",
+              background: "none",
+              cursor: "pointer",
+              padding: isMobile ? "8px 10px" : "8px 14px",
+              borderRadius: "30px",
+              fontSize: "14px",
+              fontWeight: "600",
+              color: "#2f3542",
+              border: "1px solid #e2e8f0",
+              transition: "all 0.2s ease",
+            }}
+            onMouseEnter={(e) => {
+              e.currentTarget.style.backgroundColor = "#f1f2f6";
+              e.currentTarget.style.borderColor = "#ced6e0";
+            }}
+            onMouseLeave={(e) => {
+              e.currentTarget.style.backgroundColor = "transparent";
+              e.currentTarget.style.borderColor = "#e2e8f0";
+            }}
+          >
+            <ArrowLeft size={16} />
+            {!isMobile && <span>Volver</span>}
+          </button>
+
+          <h1 style={{
+            fontSize: isMobile ? "18px" : "24px",
+            fontWeight: "800",
+            color: "#ff4757",
+            letterSpacing: "-0.5px",
+            margin: 0,
+            cursor: "pointer"
+          }} onClick={() => navigate("/")}>
+            Go<span style={{ color: "#2f3542" }}>Eats</span>
+          </h1>
+        </div>
+
+        <div style={{ display: "flex", gap: isMobile ? "6px" : "12px", alignItems: "center" }}>
+          {!isMobile && (
+            <Link to="/plus" style={{
+              fontSize: "13px",
+              fontWeight: "700",
+              color: "#d97706",
+              padding: "8px 16px",
+              borderRadius: "30px",
+              backgroundColor: "rgba(251, 191, 36, 0.08)",
+              border: "1px solid #fbbf24",
+              textDecoration: "none",
+              display: "flex",
+              alignItems: "center",
+              gap: "4px",
+              transition: "all 0.2s ease"
+            }}>
+              Hazte Plus ✨
+            </Link>
+          )}
+          {isAuthenticated && user ? (
+            <div style={{ display: "flex", alignItems: "center", gap: isMobile ? "8px" : "15px" }}>
+              {!isMobile && (
+                <div style={{ textAlign: "right" }}>
+                  <div style={{ fontSize: "13px", fontWeight: 600, color: "#202124" }}>{user.name}</div>
+                  <div style={{ fontSize: "10px", color: "var(--text-muted)" }}>{user.role}</div>
+                </div>
+              )}
+
+              {user.role === "CUSTOMER" && (
+                <Link to="/customer/dashboard" style={{
+                  fontSize: isMobile ? "11px" : "13px",
+                  fontWeight: "600",
+                  color: "#ff4757",
+                  padding: isMobile ? "6px 12px" : "8px 16px",
+                  borderRadius: "30px",
+                  border: "1px solid #ff4757",
+                  textDecoration: "none",
+                  transition: "all 0.2s ease"
+                }}>
+                  {isMobile ? "Pedidos" : "Mis Pedidos 🍔"}
+                </Link>
+              )}
+
+              {user.role === "MOTORIZADO" && (
+                <Link to="/delivery" style={{
+                  fontSize: isMobile ? "11px" : "13px",
+                  fontWeight: "600",
+                  color: "#ff4757",
+                  padding: isMobile ? "6px 12px" : "8px 16px",
+                  borderRadius: "30px",
+                  border: "1px solid #ff4757",
+                  textDecoration: "none",
+                  transition: "all 0.2s ease"
+                }}>
+                  {isMobile ? "Entregas" : "Entregas 🛵"}
+                </Link>
+              )}
+
+              {(user.role === "RESTAURANT_OWNER" || user.role === "CAJERO" || user.role === "MOZO" || user.role === "PRODUCCION") && (
+                <Link to="/pos" style={{
+                  fontSize: isMobile ? "11px" : "13px",
+                  fontWeight: "600",
+                  color: "#ff4757",
+                  padding: isMobile ? "6px 12px" : "8px 16px",
+                  borderRadius: "30px",
+                  border: "1px solid #ff4757",
+                  textDecoration: "none",
+                  transition: "all 0.2s ease"
+                }}>
+                  {isMobile ? "POS" : "Ir al POS 🖥️"}
+                </Link>
+              )}
+
+              {user.role === "SUPER_ADMIN" && (
+                <Link to="/admin/restaurants" style={{
+                  fontSize: isMobile ? "11px" : "13px",
+                  fontWeight: "600",
+                  color: "#ff4757",
+                  padding: isMobile ? "6px 12px" : "8px 16px",
+                  borderRadius: "30px",
+                  border: "1px solid #ff4757",
+                  textDecoration: "none",
+                  transition: "all 0.2s ease"
+                }}>
+                  {isMobile ? "Admin" : "Panel Admin 🛡️"}
+                </Link>
+              )}
+
+              <button
+                onClick={logout}
+                style={{
+                  display: "flex",
+                  alignItems: "center",
+                  gap: "4px",
+                  padding: isMobile ? "6px 10px" : "8px 12px",
+                  borderRadius: "30px",
+                  backgroundColor: "rgba(255, 71, 87, 0.1)",
+                  border: "1px solid rgba(255, 71, 87, 0.2)",
+                  color: "var(--accent-primary)",
+                  cursor: "pointer",
+                  fontSize: isMobile ? "11px" : "12px",
+                  fontWeight: 600,
+                  transition: "all var(--transition-fast)"
+                }}
+              >
+                Salir
+              </button>
+            </div>
+          ) : (
+            <>
+              <Link to="/login" style={{
+                fontSize: isMobile ? "11px" : "13px",
+                fontWeight: "600",
+                backgroundColor: "#000000",
+                color: "#ffffff",
+                padding: isMobile ? "6px 12px" : "8px 20px",
+                borderRadius: "30px",
+                textDecoration: "none",
+                transition: "all 0.2s ease"
+              }}>
+                {isMobile ? "Entrar" : "Iniciar Sesión"}
+              </Link>
+            </>
+          )}
+        </div>
+      </nav>
+
+      {/* Restaurant Header Banner style UberEats */}
+      <div style={{
+        position: "relative",
+        height: "280px",
+        width: "100%",
+        backgroundImage: restaurant.coverImage 
+          ? `linear-gradient(rgba(0, 0, 0, 0.1), rgba(0, 0, 0, 0.6)), url("${restaurant.coverImage}")` 
+          : "linear-gradient(135deg, #ff4757, #ff6b81)",
+        backgroundSize: "cover",
+        backgroundPosition: "center",
+        display: "flex",
+        alignItems: "flex-end",
+        padding: "30px 40px",
+        color: "#ffffff"
+      }}>
+        <div style={{
+          maxWidth: "1200px",
+          width: "100%",
+          margin: "0 auto",
+          display: "flex",
+          alignItems: "center",
+          gap: "24px",
+          position: "relative",
+          zIndex: 2
+        }}>
+          {restaurant.logo ? (
+            <img 
+              src={restaurant.logo} 
+              alt={restaurant.name} 
+              onError={(e) => {
+                e.currentTarget.src = "/logos/prueba.svg";
+              }}
+              style={{ 
+                width: "90px", 
+                height: "90px", 
+                borderRadius: "16px", 
+                objectFit: "contain",
+                backgroundColor: "#ffffff",
+                padding: "6px",
+                border: "4px solid #ffffff",
+                boxShadow: "0 4px 14px rgba(0,0,0,0.2)"
+              }} 
+            />
+          ) : (
+            <div style={{ 
+              width: "90px", 
+              height: "90px", 
+              borderRadius: "var(--radius-md)", 
+              background: "#ffffff", 
+              color: "var(--accent-primary)",
+              display: "flex", 
+              alignItems: "center", 
+              justifyContent: "center", 
+              fontSize: "2rem", 
+              fontWeight: "bold",
+              boxShadow: "var(--shadow-md)",
+              border: "4px solid #ffffff"
+            }}>
+              {restaurant.name[0].toUpperCase()}
+            </div>
+          )}
+          
+          <div style={{ textShadow: "0 2px 4px rgba(0,0,0,0.5)" }}>
+            <h1 style={{ fontSize: "2.4rem", fontWeight: "800", margin: "0 0 5px 0", letterSpacing: "-0.5px" }}>{restaurant.name}</h1>
+            {restaurant.description && (
+              <p style={{ fontSize: "1.1rem", fontStyle: "italic", margin: "0 0 10px 0", opacity: 0.9 }}>
+                {restaurant.description}
+              </p>
+            )}
+            <div style={{ display: "flex", flexWrap: "wrap", gap: "20px", fontSize: "0.95rem", opacity: 0.95 }}>
+              {restaurant.address && (
+                <div style={{ display: "flex", alignItems: "center", gap: "5px" }}>
+                  <MapPin size={16} />
+                  <span>{restaurant.address} {restaurant.reference ? `(${restaurant.reference})` : ""}</span>
+                </div>
+              )}
+              {restaurant.phone && (
+                <div style={{ display: "flex", alignItems: "center", gap: "5px" }}>
+                  <Phone size={16} />
+                  <span>{restaurant.phone}</span>
+                </div>
+              )}
+            </div>
+          </div>
+        </div>
+      </div>
+
+      {/* Table-specific Info bar (SSID) if active */}
+      {activeTableId && restaurant.wifiSsid && (
+        <div style={{ backgroundColor: "#ffeef0", borderBottom: "1px solid #ffe2e5", padding: "10px 30px" }}>
+          <div style={{ maxWidth: "1200px", margin: "0 auto", display: "flex", alignItems: "center", gap: "10px", fontSize: "14px", color: "#d63031", fontWeight: "600" }}>
+            <Wifi size={16} />
+            <span>Estás en la mesa. WiFi local: <strong>{restaurant.wifiSsid}</strong> {restaurant.wifiPassword ? `(Clave: ${restaurant.wifiPassword})` : "(Red libre)"}</span>
+          </div>
+        </div>
+      )}
+
+      {/* Main Grid */}
+      <div className="mobile-column-stack" style={{ maxWidth: "1200px", margin: "40px auto", padding: "0 20px", display: "grid", gridTemplateColumns: "1fr 380px", gap: "40px" }}>
+        
+        {/* Menu Catalog Section */}
+        <main>
+          {orderSuccess ? (
+            <div className="glass-card" style={{ padding: "40px", textAlign: "center", background: "rgba(46, 213, 115, 0.05)", borderColor: "var(--success)" }}>
+              <Check size={48} color="var(--success)" style={{ marginBottom: "15px" }} />
+              <h2 style={{ marginBottom: "10px" }}>¡Pedido Enviado con Éxito!</h2>
+              {orderType !== "DINE_IN" && paymentMethod === "TRANSFER" ? (
+                <p style={{ color: "var(--text-secondary)", marginBottom: "20px" }}>
+                  Tu orden ha sido registrada. El cajero revisará tu comprobante de transferencia bancaria para enviar el pedido a cocina.
+                </p>
+              ) : (
+                <p style={{ color: "var(--text-secondary)", marginBottom: "20px" }}>Tu orden ha sido notificada en tiempo real a la cocina del restaurante.</p>
+              )}
+              <button className="glow-btn" onClick={() => setOrderSuccess(false)}>Hacer otro pedido</button>
+            </div>
+          ) : (
+            <div style={{ display: "flex", flexDirection: "column", gap: "40px" }}>
+              {categories.map((cat) => (
+                <section key={cat.id}>
+                  <h2 style={{ fontSize: "1.6rem", borderBottom: "1px solid var(--border-light)", paddingBottom: "10px", marginBottom: "20px" }}>{cat.name}</h2>
+                  {cat.description && <p style={{ color: "var(--text-secondary)", marginBottom: "20px", fontSize: "0.95rem" }}>{cat.description}</p>}
+
+                  <div style={{ display: "flex", flexDirection: "column", gap: "20px" }}>
+                    {cat.items.map((item) => (
+                      <div key={item.id} className="glass-card" style={{ padding: "20px", display: "grid", gridTemplateColumns: "1fr 140px", gap: "20px", alignItems: "center" }}>
+                        <div>
+                          <h3 style={{ fontSize: "1.2rem", marginBottom: "8px" }}>{item.name}</h3>
+                          {item.description && <p style={{ color: "var(--text-secondary)", fontSize: "0.9rem", marginBottom: "15px" }}>{item.description}</p>}
+                          
+                          {/* Variants presentation pricing selection */}
+                          <div style={{ display: "flex", flexWrap: "wrap", gap: "10px" }}>
+                            {item.variants.map((v) => (
+                              <button key={v.id} className="secondary-btn" onClick={() => addToCart(v, item)} style={{ padding: "8px 14px", fontSize: "0.85rem" }}>
+                                <Plus size={14} color="var(--accent-primary)" />
+                                <span>{v.name}: <strong>${v.price.toFixed(2)}</strong></span>
+                              </button>
+                            ))}
+                          </div>
+                        </div>
+
+                        {item.image ? (
+                          <img src={item.image} alt={item.name} style={{ width: "100%", height: "100px", borderRadius: "var(--radius-md)", objectFit: "cover" }} />
+                        ) : (
+                          <div style={{ width: "100%", height: "100px", borderRadius: "var(--radius-md)", background: "var(--bg-tertiary)", display: "flex", alignItems: "center", justifyContent: "center" }}>
+                            <Utensils size={24} color="var(--text-muted)" />
+                          </div>
+                        )}
+                      </div>
+                    ))}
+                  </div>
+                </section>
+              ))}
+            </div>
+          )}
+        </main>
+
+        {/* Sidebar Cart & Info Section */}
+        {/* Sidebar Cart & Info Section */}
+        <aside className={`mobile-cart-aside ${isCartMobileOpen ? "open" : ""}`} style={{ display: "flex", flexDirection: "column", gap: "25px" }}>
+          <div className="glass-card" style={{ padding: "25px" }}>
+            <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", marginBottom: "20px", borderBottom: "1px solid var(--border-light)", paddingBottom: "15px" }}>
+              <div style={{ display: "flex", alignItems: "center", gap: "10px" }}>
+                <ShoppingCart size={20} color="var(--accent-primary)" />
+                <h2 style={{ fontSize: "1.3rem" }}>Tu Carrito</h2>
+              </div>
+              <button
+                type="button"
+                onClick={() => setIsCartMobileOpen(false)}
+                className="mobile-show"
+                style={{
+                  background: "none",
+                  border: "none",
+                  cursor: "pointer",
+                  color: "var(--text-secondary)",
+                  padding: "4px"
+                }}
+              >
+                <X size={20} />
+              </button>
+            </div>
+
+            {cart.length === 0 ? (
+              <div style={{ textAlign: "center", padding: "40px 10px", color: "var(--text-secondary)", fontSize: "0.95rem" }}>
+                <p>Tu carrito está vacío. Agrega platos del menú para comenzar.</p>
+              </div>
+            ) : (
+              <form onSubmit={handleCheckout}>
+                {/* Cart Items List */}
+                <div style={{ display: "flex", flexDirection: "column", gap: "15px", marginBottom: "25px", maxHeight: "250px", overflowY: "auto", paddingRight: "5px" }}>
+                  {cart.map((item) => (
+                    <div key={item.variantId} style={{ display: "flex", justifyContent: "space-between", alignItems: "flex-start", gap: "10px", fontSize: "0.9rem" }}>
+                      <div>
+                        <div style={{ fontWeight: "bold" }}>{item.itemName}</div>
+                        <div style={{ color: "var(--text-secondary)", fontSize: "0.8rem" }}>{item.name} - ${item.price.toFixed(2)}</div>
+                      </div>
+                      <div style={{ display: "flex", alignItems: "center", gap: "8px" }}>
+                        <button type="button" onClick={() => updateQuantity(item.variantId, -1)} style={{ padding: "4px", background: "var(--bg-tertiary)", borderRadius: "4px", cursor: "pointer" }}>
+                          <Minus size={12} />
+                        </button>
+                        <span>{item.quantity}</span>
+                        <button type="button" onClick={() => updateQuantity(item.variantId, 1)} style={{ padding: "4px", background: "var(--bg-tertiary)", borderRadius: "4px", cursor: "pointer" }}>
+                          <Plus size={12} />
+                        </button>
+                      </div>
+                    </div>
+                  ))}
+                </div>
+                            {/* Totals */}
+                <div style={{ display: "flex", flexDirection: "column", gap: "6px", borderTop: "1px dashed var(--border-light)", paddingTop: "15px", marginBottom: "20px" }}>
+                  <div style={{ display: "flex", justifyContent: "space-between", fontSize: "0.95rem", color: "var(--text-secondary)" }}>
+                    <span>Subtotal Productos:</span>
+                    <span>${getCartTotal().toFixed(2)}</span>
+                  </div>
+                  {orderType === "DELIVERY" && (
+                    <div style={{ display: "flex", justifyContent: "space-between", fontSize: "0.95rem", color: "var(--text-secondary)" }}>
+                      <span>Costo Envío:</span>
+                      <span style={{ color: isPlusUser ? "var(--success)" : "inherit", fontWeight: isPlusUser ? "bold" : "normal" }}>
+                        {isPlusUser ? "Gratis con Plus ✨" : `$${currentShippingCost.toFixed(2)}`}
+                      </span>
+                    </div>
+                  )}
+                  <div style={{ display: "flex", justifyContent: "space-between", fontSize: "1.1rem", fontWeight: "bold", borderTop: "1px solid var(--border-light)", paddingTop: "6px" }}>
+                    <span>Total General:</span>
+                    <span style={{ color: "var(--accent-primary)" }}>
+                      ${(getCartTotal() + currentShippingCost).toFixed(2)}
+                    </span>
+                  </div>
+                </div>
+
+                {/* Checkout Fields */}
+                <div className="input-group">
+                  <label>Tu Nombre</label>
+                  <input type="text" className="input-field" required value={customerName} onChange={(e) => setCustomerName(e.target.value)} placeholder="Ej: Juan Pérez" />
+                </div>
+
+                {/* Order Type Toggle */}
+                {activeTableId ? (
+                  <div style={{
+                    padding: "12px",
+                    backgroundColor: "rgba(46, 213, 115, 0.05)",
+                    border: "1px solid var(--success)",
+                    borderRadius: "var(--radius-sm)",
+                    color: "var(--success)",
+                    fontSize: "0.9rem",
+                    fontWeight: "bold",
+                    textAlign: "center",
+                    marginBottom: "20px",
+                    display: "flex",
+                    alignItems: "center",
+                    justifyContent: "center",
+                    gap: "8px"
+                  }}>
+                    <Utensils size={16} />
+                    Pedido para Mesa: {(() => {
+                      for (const area of diningAreas) {
+                        const found = area.tables.find(t => t.id.toString() === activeTableId.toString());
+                        if (found) return found.number;
+                      }
+                      return activeTableId;
+                    })()}
+                  </div>
+                ) : (
+                  <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: "10px", marginBottom: "20px" }}>
+                    <button type="button" className={orderType === "DELIVERY" ? "glow-btn" : "secondary-btn"} onClick={() => { setOrderType("DELIVERY"); setPaymentMethod("CASH"); }} style={{ padding: "10px" }}>
+                      Llevar a Domicilio
+                    </button>
+                    <button type="button" className={orderType === "TAKEOUT" ? "glow-btn" : "secondary-btn"} onClick={() => { setOrderType("TAKEOUT"); setPaymentMethod("CASH"); }} style={{ padding: "10px" }}>
+                      Recoger en Local
+                    </button>
+                  </div>
+                )}
+
+                {/* Force Login Message for Off-Premise */}
+                {(orderType === "DELIVERY" || orderType === "TAKEOUT") && !isAuthenticated ? (
+                  <div style={{
+                    backgroundColor: "rgba(255, 71, 87, 0.05)",
+                    border: "1px solid var(--accent-primary)",
+                    padding: "15px",
+                    borderRadius: "var(--radius-md)",
+                    marginBottom: "20px",
+                    textAlign: "center"
+                  }}>
+                    <AlertCircle size={24} style={{ color: "var(--accent-primary)", margin: "0 auto 8px auto" }} />
+                    <p style={{ fontSize: "13px", color: "var(--text-primary)", marginBottom: "12px", fontWeight: "600" }}>
+                      Inicia sesión para realizar tu pedido
+                    </p>
+                    <button
+                      type="button"
+                      className="glow-btn"
+                      onClick={() => navigate("/login")}
+                      style={{ width: "100%", padding: "8px", fontSize: "13px" }}
+                    >
+                      Iniciar Sesión / Registrarse
+                    </button>
+                  </div>
+                ) : (
+                  <>
+                    {/* Conditionally Render Fields */}
+                    {orderType === "DELIVERY" && (
+                      <>
+                        <div style={{ marginBottom: "15px" }}>
+                          <label style={{ fontSize: "12px", fontWeight: "700", marginBottom: "8px", display: "block", color: "var(--text-primary)" }}>
+                            📍 Ubicación de Entrega en el Mapa
+                          </label>
+                          <LocationPickerMap
+                            initialLat={deliveryLat || undefined}
+                            initialLng={deliveryLng || undefined}
+                            restaurantLat={restaurant?.mapLatitude || -3.9965}
+                            restaurantLng={restaurant?.mapLongitude || -79.2030}
+                            restaurantName={restaurant?.name || "Restaurante"}
+                            onLocationSelect={(lat, lng, addr, distKm) => {
+                              setDeliveryLat(lat);
+                              setDeliveryLng(lng);
+                              if (addr) setDeliveryAddress(addr);
+                              if (distKm !== undefined && distKm > 0) setSimulatedDistance(distKm);
+                            }}
+                            height="280px"
+                          />
+                        </div>
+
+                        <div className="input-group">
+                          <label>Dirección de Envío (Edita o agrega detalles)</label>
+                          <input type="text" className="input-field" required={orderType === "DELIVERY"} value={deliveryAddress} onChange={(e) => setDeliveryAddress(e.target.value)} placeholder="Ej: Calle 24 de Mayo y Mercadillo, Barrio Central" />
+                        </div>
+                        <div className="input-group">
+                          <label>Teléfono de Contacto</label>
+                          <input type="text" className="input-field" required={orderType === "DELIVERY"} value={deliveryPhone} onChange={(e) => setDeliveryPhone(e.target.value)} placeholder="Ej: 0998765432" />
+                        </div>
+
+                        {/* Interactive Distance & Fee Breakdown */}
+                        <div style={{
+                          marginTop: "12px",
+                          marginBottom: "20px",
+                          padding: "14px",
+                          backgroundColor: "var(--bg-secondary)",
+                          borderRadius: "var(--radius-md)",
+                          border: "1px solid var(--border-light)"
+                        }}>
+                          <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: "8px" }}>
+                            <span style={{ fontSize: "12px", fontWeight: "700" }}>Distancia Calculada al Local:</span>
+                            <span style={{ backgroundColor: "rgba(255, 71, 87, 0.1)", color: "#ff4757", padding: "2px 8px", borderRadius: "12px", fontSize: "12px", fontWeight: "800" }}>
+                              {simulatedDistance.toFixed(1)} km
+                            </span>
+                          </div>
+                          <div style={{ fontSize: "11px", color: "var(--text-secondary)", display: "flex", flexDirection: "column", gap: "4px" }}>
+                            <div style={{ display: "flex", justifyContent: "space-between" }}>
+                              <span>Tarifa Base:</span>
+                              <span>${(deliveryRate?.basePrice || 1.0).toFixed(2)}</span>
+                            </div>
+                            <div style={{ display: "flex", justifyContent: "space-between" }}>
+                              <span>Costo por Kilómetro:</span>
+                              <span>${(deliveryRate?.pricePerKm || 0.5).toFixed(2)} / km</span>
+                            </div>
+                            <div style={{ display: "flex", justifyContent: "space-between", fontWeight: "bold", borderTop: "1px dashed var(--border-light)", paddingTop: "6px", color: "var(--text-primary)" }}>
+                              <span>Costo de Envío:</span>
+                              <span style={{ color: isPlusUser ? "var(--success)" : "inherit" }}>
+                                {isPlusUser ? "Gratis con Plus ✨" : `$${currentShippingCost.toFixed(2)}`}
+                              </span>
+                            </div>
+                          </div>
+                        </div>
+                      </>
+                    )}
+
+                    {/* Payment Method Selector */}
+                    {(orderType === "DELIVERY" || orderType === "TAKEOUT") && (
+                      <div style={{
+                        marginTop: "15px",
+                        marginBottom: "20px",
+                        padding: "15px",
+                        backgroundColor: "var(--bg-secondary)",
+                        borderRadius: "var(--radius-md)",
+                        border: "1px solid var(--border-light)"
+                      }}>
+                        <label style={{ fontSize: "12px", fontWeight: "600", marginBottom: "8px", display: "block" }}>
+                          Método de Pago
+                        </label>
+                        <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr 1fr", gap: "8px", marginBottom: "12px" }}>
+                          <button
+                            type="button"
+                            className={paymentMethod === "CASH" ? "glow-btn" : "secondary-btn"}
+                            onClick={() => {
+                              setPaymentMethod("CASH");
+                              setPaymentReceipt("");
+                              setPayphoneTransactionId("");
+                            }}
+                            style={{ padding: "8px 4px", fontSize: "0.8rem" }}
+                          >
+                            Efectivo
+                          </button>
+                          
+                          <button
+                            type="button"
+                            className={paymentMethod === "CARD" ? "glow-btn" : "secondary-btn"}
+                            onClick={() => {
+                              setPaymentMethod("CARD");
+                              setPaymentReceipt("");
+                              setPayphoneTransactionId("");
+                            }}
+                            style={{ padding: "8px 4px", fontSize: "0.8rem" }}
+                          >
+                            Tarjeta
+                          </button>
+
+                          <button
+                            type="button"
+                            className={paymentMethod === "TRANSFER" ? "glow-btn" : "secondary-btn"}
+                            onClick={() => {
+                              setPaymentMethod("TRANSFER");
+                              setPayphoneTransactionId("");
+                            }}
+                            style={{ padding: "8px 4px", fontSize: "0.8rem" }}
+                          >
+                            Transferencia
+                          </button>
+                        </div>
+
+                        {/* Payphone CARD flow */}
+                        {paymentMethod === "CARD" && (
+                          <div style={{ marginTop: "10px" }}>
+                            {payphoneTransactionId ? (
+                              <div style={{
+                                display: "flex",
+                                  alignItems: "center",
+                                gap: "8px",
+                                backgroundColor: "rgba(46, 213, 115, 0.05)",
+                                border: "1px solid var(--success)",
+                                padding: "10px",
+                                borderRadius: "var(--radius-sm)",
+                                color: "var(--success)",
+                                fontSize: "0.85rem"
+                              }}>
+                                <Check size={16} />
+                                <div>
+                                  <div style={{ fontWeight: "bold" }}>Pago Exitoso</div>
+                                  <div style={{ fontSize: "11px" }}>Transacción: {payphoneTransactionId}</div>
+                                </div>
+                              </div>
+                            ) : (
+                              <button
+                                type="button"
+                                className="glow-btn"
+                                onClick={() => setShowPayphoneSimulator(true)}
+                                style={{ width: "100%", padding: "10px", backgroundColor: "#ff5a00", borderColor: "#ff5a00" }}
+                              >
+                                Pagar con Tarjeta (Payphone)
+                              </button>
+                            )}
+                          </div>
+                        )}
+
+                        {/* Bank TRANSFER flow */}
+                        {paymentMethod === "TRANSFER" && activeBankAccounts.length > 0 && (
+                          <div style={{ marginTop: "12px", display: "flex", flexDirection: "column", gap: "10px" }}>
+                            <label style={{ fontSize: "11px", fontWeight: "600", color: "var(--text-secondary)" }}>
+                              Seleccionar Cuenta Bancaria:
+                            </label>
+                            <select
+                              className="input-field"
+                              value={selectedBankAccId}
+                              onChange={(e) => setSelectedBankAccId(e.target.value)}
+                              style={{ padding: "6px", fontSize: "0.85rem" }}
+                            >
+                              {activeBankAccounts.map((acc: any) => (
+                                <option key={acc.id} value={acc.id}>
+                                  {acc.bank} - {acc.accountType === "ahorros" ? "Ahorros" : "Corriente"}
+                                </option>
+                              ))}
+                            </select>
+
+                            {/* Render details of selected account */}
+                            {(() => {
+                              const acc = activeBankAccounts.find((a: any) => a.id.toString() === selectedBankAccId.toString());
+                              if (!acc) return null;
+                              return (
+                                <div style={{
+                                  fontSize: "11px",
+                                  backgroundColor: "var(--bg-tertiary)",
+                                  padding: "10px",
+                                  borderRadius: "var(--radius-sm)",
+                                  border: "1px solid var(--border-light)",
+                                  display: "flex",
+                                  flexDirection: "column",
+                                  gap: "4px"
+                                }}>
+                                  <div><strong>Banco:</strong> {acc.bank}</div>
+                                  <div><strong>Titular:</strong> {acc.ownerName}</div>
+                                  <div><strong>Tipo:</strong> {acc.accountType === "ahorros" ? "Ahorros" : "Corriente"}</div>
+                                  <div><strong>Número:</strong> {acc.accountNumber}</div>
+                                  <div><strong>RUC/Cédula:</strong> {acc.ownerDoc}</div>
+                                  {acc.ownerEmail && <div><strong>Correo:</strong> {acc.ownerEmail}</div>}
+                                  
+                                  {acc.qrImage && (
+                                    <div style={{ marginTop: "8px", textAlign: "center" }}>
+                                      <div style={{ fontWeight: "600", marginBottom: "4px" }}>Código QR de Pago:</div>
+                                      <img
+                                        src={acc.qrImage}
+                                        alt="QR de Pago"
+                                        style={{ maxWidth: "150px", maxHeight: "150px", borderRadius: "4px", border: "1px solid var(--border-light)" }}
+                                      />
+                                    </div>
+                                  )}
+                                </div>
+                              );
+                            })()}
+
+                            {/* File Upload for receipt */}
+                            <div className="input-group" style={{ marginBottom: 0 }}>
+                              <label style={{ fontSize: "11px", fontWeight: "600" }}>Subir Comprobante de Pago</label>
+                              <input
+                                type="file"
+                                accept="image/*"
+                                className="input-field"
+                                onChange={(e) => {
+                                  const file = e.target.files?.[0];
+                                  if (file) {
+                                    const reader = new FileReader();
+                                    reader.onloadend = () => {
+                                      setPaymentReceipt(reader.result as string);
+                                    };
+                                    reader.readAsDataURL(file);
+                                  }
+                                }}
+                                style={{ padding: "4px", fontSize: "0.85rem" }}
+                              />
+                              {paymentReceipt && (
+                                <div style={{ marginTop: "6px", fontSize: "11px", color: "var(--success)", display: "flex", alignItems: "center", gap: "4px" }}>
+                                  <Check size={12} /> Comprobante cargado correctamente.
+                                </div>
+                              )}
+                            </div>
+                          </div>
+                        )}
+                      </div>
+                    )}
+
+                    {orderType === "DINE_IN" && (
+                      <div className="input-group">
+                        <label>Selecciona tu Mesa</label>
+                        {activeTableId ? (
+                          <input
+                            type="text"
+                            className="input-field"
+                            readOnly
+                            value={`Mesa ${(() => {
+                              for (const area of diningAreas) {
+                                const found = area.tables.find(t => t.id.toString() === activeTableId.toString());
+                                if (found) return found.number;
+                              }
+                              return activeTableId;
+                            })()}`}
+                            style={{ background: "var(--success-glow)", borderColor: "var(--success)", fontWeight: "bold" }}
+                          />
+                        ) : (
+                          <select className="input-field" required={orderType === "DINE_IN"} value={selectedTable} onChange={(e) => setSelectedTable(e.target.value)}>
+                            <option value="">-- Selecciona --</option>
+                            {diningAreas.map((area) => (
+                              <optgroup key={area.id} label={area.name}>
+                                {area.tables.map((t) => (
+                                  <option key={t.id} value={t.id}>Mesa {t.number}</option>
+                                ))}
+                              </optgroup>
+                            ))}
+                          </select>
+                        )}
+                      </div>
+                    )}
+
+                    {/* QR Ordering Toggle Guard */}
+                    {orderType === "DINE_IN" && !restaurant.qrOrderingEnabled ? (
+                      <div style={{ background: "rgba(255, 71, 87, 0.1)", border: "1px solid var(--accent-primary)", padding: "15px", borderRadius: "var(--radius-md)", display: "flex", gap: "10px", color: "var(--text-primary)", fontSize: "0.85rem", marginBottom: "20px" }}>
+                        <AlertCircle size={24} style={{ flexShrink: 0, color: "var(--accent-primary)" }} />
+                        <p><strong>Pedidos QR Desactivados:</strong> El restaurante no tiene activo el autopendiente desde mesas. Por favor contacta a un mesero para realizar tu orden.</p>
+                      </div>
+                    ) : (
+                      <button type="submit" className="glow-btn" style={{ width: "100%" }} disabled={submitting}>
+                        {submitting ? "Procesando..." : "Confirmar Pedido"}
+                      </button>
+                    )}
+                  </>
+                )}
+              </form>
+            )}
+          </div>
+
+          {/* Local Information Card (Map, Reference, Hours) */}
+          <div className="glass-card" style={{ padding: "25px" }}>
+            <div style={{ display: "flex", alignItems: "center", gap: "10px", marginBottom: "15px", borderBottom: "1px solid var(--border-light)", paddingBottom: "10px" }}>
+              <MapPin size={18} color="var(--accent-primary)" />
+              <h3 style={{ fontSize: "1.1rem", margin: 0, fontWeight: "700" }}>Información del Local</h3>
+            </div>
+            
+            {/* Opening hours */}
+            {restaurant.openingHours && (
+              <div style={{ marginBottom: "15px" }}>
+                <div style={{ display: "flex", alignItems: "center", gap: "6px", fontSize: "0.9rem", color: "var(--text-secondary)", marginBottom: "4px" }}>
+                  <Clock size={15} />
+                  <strong>Horarios de Atención:</strong>
+                </div>
+                <div style={{
+                  padding: "8px 12px",
+                  borderRadius: "var(--radius-sm)",
+                  backgroundColor: "var(--bg-tertiary)",
+                  border: "1px solid var(--border-light)",
+                  fontSize: "0.85rem",
+                  fontWeight: "500"
+                }}>
+                  {restaurant.openingHours}
+                </div>
+              </div>
+            )}
+
+            {/* Reference */}
+            {restaurant.reference && (
+              <div style={{ marginBottom: "15px" }}>
+                <strong style={{ fontSize: "0.9rem", color: "var(--text-secondary)", display: "block", marginBottom: "4px" }}>Referencia:</strong>
+                <p style={{ fontSize: "0.85rem", margin: 0, color: "var(--text-primary)" }}>{restaurant.reference}</p>
+              </div>
+            )}
+
+            {/* Google Map Embedded (Iframe) */}
+            {restaurant.mapIframe ? (
+              <div style={{ marginTop: "15px" }}>
+                <strong style={{ fontSize: "0.9rem", color: "var(--text-secondary)", display: "block", marginBottom: "8px" }}>Ubicación:</strong>
+                <div 
+                  style={{ 
+                    borderRadius: "var(--radius-md)", 
+                    overflow: "hidden", 
+                    border: "1px solid var(--border-light)",
+                    height: "200px" 
+                  }}
+                  dangerouslySetInnerHTML={{ 
+                    __html: restaurant.mapIframe
+                      .replace(/width="[^"]*"/g, 'width="100%"')
+                      .replace(/height="[^"]*"/g, 'height="100%"')
+                  }}
+                />
+              </div>
+            ) : (
+              restaurant.mapLatitude && restaurant.mapLongitude ? (
+                <div style={{ marginTop: "15px" }}>
+                  <a 
+                    href={`https://www.google.com/maps/search/?api=1&query=${restaurant.mapLatitude},${restaurant.mapLongitude}`}
+                    target="_blank" 
+                    rel="noopener noreferrer"
+                    className="secondary-btn"
+                    style={{ display: "flex", alignItems: "center", justifyContent: "center", gap: "8px", width: "100%", padding: "10px", fontSize: "0.85rem", textDecoration: "none" }}
+                  >
+                    <MapPin size={14} />
+                    Ver ubicación en Google Maps
+                  </a>
+                </div>
+              ) : null
+            )}
+          </div>
+        </aside>
+
+      </div>
+
+      {/* FAQs Section */}
+      <div style={{ maxWidth: "1200px", margin: "40px auto 80px auto", padding: "0 20px" }}>
+        <h2 style={{ 
+          fontSize: "1.8rem", 
+          fontWeight: "800",
+          color: "#202124",
+          marginBottom: "25px", 
+          borderBottom: "1px solid var(--border-light)", 
+          paddingBottom: "12px",
+          display: "flex",
+          alignItems: "center",
+          gap: "10px"
+        }}>
+          Preguntas Frecuentes
+        </h2>
+        
+        <div style={{ display: "flex", flexDirection: "column", gap: "12px" }}>
+          {(() => {
+            const getFaqs = () => {
+              if (restaurant.faqsJson) {
+                try {
+                  const parsed = JSON.parse(restaurant.faqsJson);
+                  if (Array.isArray(parsed) && parsed.length > 0) {
+                    return parsed;
+                  }
+                } catch (e) {
+                  console.error("Error parsing FAQs JSON", e);
+                }
+              }
+              return [
+                {
+                  question: "¿Qué tipo de verde utilizan para los bolones?",
+                  answer: "Utilizamos plátano verde dominico de primera calidad, cocinado en su punto y majado artesanalmente para lograr la textura crocante por fuera y suave por dentro que nos caracteriza."
+                },
+                {
+                  question: "¿Los bolones vienen con café incluido?",
+                  answer: "¡Por supuesto! Todos nuestros bolones en combo vienen acompañados de una taza de café negro caliente filtrado al momento."
+                },
+                {
+                  question: "¿Cuál es el tiempo aproximado de entrega a domicilio?",
+                  answer: "El tiempo aproximado es de 30 a 45 minutos, dependiendo de la distancia del reparto y el volumen de pedidos en la cocina."
+                },
+                {
+                  question: "¿Hacen entregas en días feriados?",
+                  answer: "Sí, abrimos todos los días del año, incluyendo feriados, en nuestros horarios habituales para que nunca te quedes con las ganas de un buen bolón."
+                }
+              ];
+            };
+
+            const parsedFaqs = getFaqs();
+            return parsedFaqs.map((faq: any, index: number) => {
+              const isOpen = openFaqIndex === index;
+              return (
+                <div 
+                  key={index} 
+                  style={{
+                    border: "1px solid var(--border-light)",
+                    borderRadius: "var(--radius-md)",
+                    backgroundColor: "#ffffff",
+                    overflow: "hidden",
+                    transition: "all var(--transition-fast)"
+                  }}
+                >
+                  <button
+                    type="button"
+                    onClick={() => setOpenFaqIndex(isOpen ? null : index)}
+                    style={{
+                      width: "100%",
+                      display: "flex",
+                      justifyContent: "space-between",
+                      alignItems: "center",
+                      padding: "20px 25px",
+                      background: "none",
+                      border: "none",
+                      textAlign: "left",
+                      cursor: "pointer",
+                      fontSize: "1.05rem",
+                      fontWeight: "700",
+                      color: "#202124"
+                    }}
+                  >
+                    <span>{faq.question}</span>
+                    <span style={{ 
+                      fontSize: "1.3rem", 
+                      fontWeight: "400",
+                      color: "var(--accent-primary)",
+                      transform: isOpen ? "rotate(45deg)" : "none",
+                      transition: "transform var(--transition-fast)"
+                    }}>
+                      ＋
+                    </span>
+                  </button>
+                  
+                  {isOpen && (
+                    <div style={{
+                      padding: "0 25px 20px 25px",
+                      fontSize: "0.95rem",
+                      lineHeight: "1.6",
+                      color: "var(--text-secondary)"
+                    }}>
+                      {faq.answer}
+                    </div>
+                  )}
+                </div>
+              );
+            });
+          })()}
+        </div>
+      </div>
+
+      {/* Payphone Simulator Modal */}
+      {showPayphoneSimulator && (
+        <div className="global-modal-overlay">
+          <div className="global-modal-card" style={{ maxWidth: "380px", padding: "25px" }}>
+            <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", marginBottom: "20px", borderBottom: "1px solid var(--border-light)", paddingBottom: "10px" }}>
+              <div style={{ display: "flex", alignItems: "center", gap: "8px" }}>
+                <div style={{ width: "24px", height: "24px", borderRadius: "50%", backgroundColor: "#ff5a00", color: "#fff", display: "flex", alignItems: "center", justifyContent: "center", fontSize: "12px", fontWeight: "bold" }}>P</div>
+                <h3 style={{ fontSize: "1.1rem", fontWeight: "bold", margin: 0, color: "#ff5a00" }}>Pasarela Payphone</h3>
+              </div>
+              <button
+                type="button"
+                onClick={() => setShowPayphoneSimulator(false)}
+                style={{ background: "none", border: "none", color: "var(--text-secondary)", fontSize: "1.2rem", cursor: "pointer" }}
+              >
+                &times;
+              </button>
+            </div>
+
+            <div style={{ display: "flex", flexDirection: "column", gap: "12px" }}>
+              <div style={{ fontSize: "0.85rem", color: "var(--text-secondary)", marginBottom: "8px" }}>
+                Estás realizando un pago simulado por un total de <strong>${(getCartTotal() + currentShippingCost).toFixed(2)}</strong> a favor de {restaurant.name}.
+              </div>
+
+              <div className="input-group">
+                <label style={{ fontSize: "11px" }}>Número de Tarjeta</label>
+                <input type="text" className="input-field" placeholder="4111 1111 1111 1111" defaultValue="4111 1111 1111 1111" />
+              </div>
+
+              <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: "10px" }}>
+                <div className="input-group">
+                  <label style={{ fontSize: "11px" }}>Fecha Vencimiento</label>
+                  <input type="text" className="input-field" placeholder="12/28" defaultValue="12/28" />
+                </div>
+                <div className="input-group">
+                  <label style={{ fontSize: "11px" }}>CVV</label>
+                  <input type="password" className="input-field" placeholder="123" defaultValue="123" />
+                </div>
+              </div>
+
+              <div className="input-group">
+                <label style={{ fontSize: "11px" }}>Titular de la Tarjeta</label>
+                <input type="text" className="input-field" placeholder="Juan Pérez" defaultValue={customerName || "Juan Pérez"} />
+              </div>
+
+              <button
+                type="button"
+                className="glow-btn"
+                onClick={() => {
+                  const simulatedId = `PAY-${Math.random().toString(36).substring(2, 11).toUpperCase()}`;
+                  setPayphoneTransactionId(simulatedId);
+                  setShowPayphoneSimulator(false);
+                }}
+                style={{ width: "100%", padding: "12px", backgroundColor: "#ff5a00", borderColor: "#ff5a00", marginTop: "10px" }}
+              >
+                Confirmar Pago Exitoso
+              </button>
+
+              <button
+                type="button"
+                className="secondary-btn"
+                onClick={() => setShowPayphoneSimulator(false)}
+                style={{ width: "100%", padding: "10px" }}
+              >
+                Cancelar
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+      {/* Floating cart button for mobile */}
+      {cart.length > 0 && !isCartMobileOpen && (
+        <div
+          className="mobile-show-flex animate-fade-in"
+          style={{
+            position: "fixed",
+            bottom: "20px",
+            left: "20px",
+            right: "20px",
+            zIndex: 90,
+            justifyContent: "center",
+            display: "none"
+          }}
+        >
+          <button
+            onClick={() => setIsCartMobileOpen(true)}
+            className="glow-btn"
+            style={{
+              width: "100%",
+              padding: "16px 24px",
+              fontSize: "16px",
+              boxShadow: "0 10px 25px rgba(255, 71, 87, 0.3)",
+              display: "flex",
+              justifyContent: "space-between",
+              alignItems: "center",
+              borderRadius: "var(--radius-xl)"
+            }}
+          >
+            <span style={{ display: "flex", alignItems: "center", gap: "10px" }}>
+              <ShoppingCart size={20} />
+              Ver Pedido ({cart.reduce((sum, item) => sum + item.quantity, 0)} ítems)
+            </span>
+            <strong>${(getCartTotal() + currentShippingCost).toFixed(2)}</strong>
+          </button>
+        </div>
+      )}
+    </div>
+  );
+};

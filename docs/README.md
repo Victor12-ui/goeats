@@ -1,0 +1,48 @@
+# 🧭 GoEats - Índice Maestro de Documentación y Mapa del Sistema
+
+> **Propósito:** Esta carpeta `docs/` contiene la documentación modular y mapas directos del código para que cualquier desarrollador o agente de IA pueda ubicar exactamente dónde está cada lógica sin necesidad de escanear todo el repositorio.
+
+---
+
+## 📂 Estructura de la Documentación
+
+```
+docs/
+├── README.md                          <- Este archivo (Índice Maestro y Guía de Navegación)
+│
+├── repartidores/                      <- Lógica financiera, operativa y antifraude de motorizados
+│   ├── 01_logica_financiera.md        <- Fórmulas matemáticas, deudas, comisiones y balance antifraude
+│   ├── 02_flujo_operativo.md          <- Pantalla estilo Zaymi, estados de orden y acciones del motorizado
+│   └── 03_liquidacion_cortes.md       <- Cortes periódicos (cada 5h), aprobación administrativa y pagos
+│
+└── arquitectura/                      <- Mapas exactos de código fuente (rutas, modelos y componentes)
+    ├── mapa_backend.md                <- Rutas Express, Prisma schema, Socket.io y controladores
+    ├── mapa_frontend.md               <- Páginas React, componentes, estados y pantallas POS/Repartidor
+    └── mapa_mobile.md                 <- Aplicación Flutter (goeats_customer_app), providers y servicios
+```
+
+---
+
+## ⚡ Guía Rápida: ¿Dónde buscar qué?
+
+| ¿Qué necesitas consultar o modificar? | Archivo de referencia | Ubicación en código |
+| :--- | :--- | :--- |
+| **Lógica matemática de comisión, deuda y pagos de repartidor** | [01_logica_financiera.md](file:///c:/Users/vmont/OneDrive/Desktop/SISTEMA%20GOEATS%20%282%291/SISTEMA%20GOEATS/SISTEMA%20GOEATS/docs/repartidores/01_logica_financiera.md) | [delivery.controller.ts](file:///c:/Users/vmont/OneDrive/Desktop/SISTEMA%20GOEATS%20%282%291/SISTEMA%20GOEATS/SISTEMA%20GOEATS/backend/src/modules/delivery/delivery.controller.ts) |
+| **Pantalla del repartidor (Pagar Proveedor / Cobrar Cliente estilo Zaymi)** | [02_flujo_operativo.md](file:///c:/Users/vmont/OneDrive/Desktop/SISTEMA%20GOEATS%20%282%291/SISTEMA%20GOEATS/SISTEMA%20GOEATS/docs/repartidores/02_flujo_operativo.md) | [DeliveryDashboard.tsx](file:///c:/Users/vmont/OneDrive/Desktop/SISTEMA%20GOEATS%20%282%291/SISTEMA%20GOEATS/SISTEMA%20GOEATS/frontend/src/pages/DeliveryDashboard.tsx) |
+| **Cortes de 5 horas y liquidaciones a motorizados** | [03_liquidacion_cortes.md](file:///c:/Users/vmont/OneDrive/Desktop/SISTEMA%20GOEATS%20%282%291/SISTEMA%20GOEATS/SISTEMA%20GOEATS/docs/repartidores/03_liquidacion_cortes.md) | [SuperAdmin.tsx](file:///c:/Users/vmont/OneDrive/Desktop/SISTEMA%20GOEATS%20%282%291/SISTEMA%20GOEATS/SISTEMA%20GOEATS/frontend/src/pages/SuperAdmin.tsx) y backend `/delivery/recharge` |
+| **Modelos de Base de Datos y Entidades** | [mapa_backend.md](file:///c:/Users/vmont/OneDrive/Desktop/SISTEMA%20GOEATS%20%282%291/SISTEMA%20GOEATS/SISTEMA%20GOEATS/docs/arquitectura/mapa_backend.md) | [schema.prisma](file:///c:/Users/vmont/OneDrive/Desktop/SISTEMA%20GOEATS%20%282%291/SISTEMA%20GOEATS/SISTEMA%20GOEATS/backend/prisma/schema.prisma) |
+| **Punto de Venta (POS) y Facturación SRI** | [mapa_frontend.md](file:///c:/Users/vmont/OneDrive/Desktop/SISTEMA%20GOEATS%20%282%291/SISTEMA%20GOEATS/SISTEMA%20GOEATS/docs/arquitectura/mapa_frontend.md) | [POS.tsx](file:///c:/Users/vmont/OneDrive/Desktop/SISTEMA%20GOEATS%20%282%291/SISTEMA%20GOEATS/SISTEMA%20GOEATS/frontend/src/pages/POS.tsx) |
+| **App Móvil de Clientes / Pedidos** | [mapa_mobile.md](file:///c:/Users/vmont/OneDrive/Desktop/SISTEMA%20GOEATS%20%282%291/SISTEMA%20GOEATS/SISTEMA%20GOEATS/docs/arquitectura/mapa_mobile.md) | [goeats_customer_app/lib/](file:///c:/Users/vmont/OneDrive/Desktop/SISTEMA%20GOEATS%20%282%291/SISTEMA%20GOEATS/SISTEMA%20GOEATS/goeats_customer_app/lib) |
+
+---
+
+## 🛠️ Entorno de Ejecución
+
+- **Backend:** Node.js v20+, TypeScript, Express, Prisma ORM, Socket.io.
+  * Puerto por defecto: `http://localhost:4000`
+  * Comando para iniciar: `npm run dev` en `backend/`
+- **Frontend Web:** Vite, React 19, TypeScript, Lucide Icons.
+  * Puerto por defecto: `http://localhost:5173`
+  * Comando para iniciar: `npm run dev` en `frontend/`
+- **App Móvil:** Flutter SDK, Dart.
+  * Carpeta: `goeats_customer_app/`

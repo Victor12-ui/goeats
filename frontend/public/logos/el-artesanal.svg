@@ -1,0 +1,49 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 400 120" width="100%" height="100%">
+  <defs>
+    <linearGradient id="artesanalGrad" x1="0%" y1="0%" x2="100%" y2="100%">
+      <stop offset="0%" stop-color="#2c1810"/>
+      <stop offset="100%" stop-color="#150a06"/>
+    </linearGradient>
+    <linearGradient id="goldGrad" x1="0%" y1="0%" x2="100%" y2="0%">
+      <stop offset="0%" stop-color="#d4af37"/>
+      <stop offset="50%" stop-color="#ffd700"/>
+      <stop offset="100%" stop-color="#d4af37"/>
+    </linearGradient>
+    <filter id="badgeShadow" x="-10%" y="-10%" width="120%" height="120%">
+      <feDropShadow dx="0" dy="2" stdDeviation="3" flood-opacity="0.3"/>
+    </filter>
+  </defs>
+
+  <!-- Background container -->
+  <rect width="400" height="120" rx="14" fill="url(#artesanalGrad)" filter="url(#badgeShadow)"/>
+  
+  <!-- Outer decorative border -->
+  <rect x="8" y="8" width="384" height="104" rx="10" fill="none" stroke="url(#goldGrad)" stroke-width="2" stroke-dasharray="6,4"/>
+
+  <!-- Left Icon Emblem: Burger & Flame -->
+  <g transform="translate(24, 20)">
+    <!-- Shield Circle -->
+    <circle cx="40" cy="40" r="34" fill="#ff4757" stroke="#ffd700" stroke-width="2"/>
+    <!-- Burger bun top -->
+    <path d="M22 36 Q40 18 58 36 Z" fill="#ffd700"/>
+    <!-- Patty -->
+    <rect x="20" y="40" width="40" height="7" rx="3" fill="#2c1810"/>
+    <!-- Cheese slice -->
+    <polygon points="21,46 59,46 54,52 46,47 38,53 30,47 24,51" fill="#ffa502"/>
+    <!-- Burger bun bottom -->
+    <rect x="22" y="52" width="36" height="7" rx="3" fill="#ffd700"/>
+    <!-- Stars -->
+    <path d="M40 10 L42 15 L47 15 L43 18 L45 23 L40 20 L35 23 L37 18 L33 15 L38 15 Z" fill="#ffffff"/>
+  </g>
+
+  <!-- Typography -->
+  <!-- "EL" subheader -->
+  <text x="125" y="44" fill="#ffd700" font-family="'Impact', 'Arial Black', sans-serif" font-size="14" font-weight="bold" letter-spacing="6">RESTAURANTE</text>
+  
+  <!-- "ARTESANAL" main title -->
+  <text x="125" y="78" fill="#ffffff" font-family="'Impact', 'Arial Black', sans-serif" font-size="34" font-weight="900" letter-spacing="2">EL ARTESANAL</text>
+
+  <!-- "LOJA - ECUADOR" badge -->
+  <rect x="125" y="86" width="160" height="18" rx="4" fill="#ff4757"/>
+  <text x="205" y="99" fill="#ffffff" font-family="'Segoe UI', Roboto, sans-serif" font-size="10.5" font-weight="bold" letter-spacing="2" text-anchor="middle">LOJA • SABOR LOCAL</text>
+</svg>

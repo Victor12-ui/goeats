@@ -1,0 +1,50 @@
+﻿# Dependencies
+node_modules/
+*/node_modules/
+
+# Production builds
+dist/
+*/dist/
+dist-ssr/
+*/dist-ssr/
+build/
+*/build/
+
+# Mobile (Flutter)
+.dart_tool/
+*/.dart_tool/
+.flutter-plugins*
+*/.flutter-plugins*
+.pub-cache/
+.pub/
+
+# Database files & MySQL local data
+backend/db-data/
+backend/mysql-empty-data/
+*.pid
+*.err
+*.dblwr
+*.ibd
+ibdata*
+auto.cnf
+binlog.*
+
+# Environment files
+.env
+.env*.local
+!.env.example
+
+# Logs
+*.log
+logs/
+npm-debug.log*
+yarn-debug.log*
+
+# Editor & OS files
+.DS_Store
+Thumbs.db
+.idea/
+.vscode/
+*.iml
+*.suo
+*.user

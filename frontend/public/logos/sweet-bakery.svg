@@ -1,0 +1,9 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 200 200" width="100%" height="100%">
+  <rect width="200" height="200" rx="24" fill="#FCE4EC"/>
+  <!-- Cupcake / Cake icon -->
+  <circle cx="100" cy="50" r="10" fill="#E91E63"/>
+  <path d="M 75 80 C 70 60 130 60 125 80 Z" fill="#F8BBD0"/>
+  <path d="M 80 80 L 85 105 L 115 105 L 120 80 Z" fill="#8D6E63"/>
+  <text x="100" y="145" font-family="'Arial Black', sans-serif" font-weight="900" font-size="16" fill="#880E4F" text-anchor="middle" letter-spacing="1">SWEET BAKERY</text>
+  <text x="100" y="168" font-family="sans-serif" font-weight="700" font-size="13" fill="#D81B60" text-anchor="middle" letter-spacing="4">&amp; CAFÉ</text>
+</svg>

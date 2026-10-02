@@ -1,0 +1,8 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 200 200" width="100%" height="100%">
+  <rect width="200" height="200" rx="24" fill="#E8F5E9"/>
+  <!-- Leaf icon -->
+  <path d="M 100 35 C 140 35 155 75 140 105 C 120 120 80 120 60 105 C 45 75 60 35 100 35 Z" fill="#2E7D32"/>
+  <path d="M 100 45 Q 100 85 85 105 M 100 70 Q 120 60 125 75 M 100 85 Q 75 80 70 90" stroke="#FFFFFF" stroke-width="3" fill="none" stroke-linecap="round"/>
+  <text x="100" y="145" font-family="'Arial Black', sans-serif" font-weight="900" font-size="16" fill="#1B5E20" text-anchor="middle" letter-spacing="1">SALAD GREEN</text>
+  <text x="100" y="168" font-family="sans-serif" font-weight="700" font-size="13" fill="#4CAF50" text-anchor="middle" letter-spacing="4">&amp; CO</text>
+</svg>
