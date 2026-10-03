@@ -38,6 +38,9 @@ interface EmailStats {
   pending: number;
   gmailConfig: {
     isReady: boolean;
+    isOAuthReady?: boolean;
+    isGmailSmtp?: boolean;
+    smtpHost?: string;
     user: string | null;
     hasClientId: boolean;
     hasClientSecret: boolean;
@@ -61,6 +64,13 @@ export const EmailNotificationsTab: React.FC = () => {
 
   // Retry state
   const [retryingId, setRetryingId] = useState<number | null>(null);
+  const [retryingAll, setRetryingAll] = useState(false);
+
+  // Direct config state
+  const [refreshTokenInput, setRefreshTokenInput] = useState("");
+  const [appPasswordInput, setAppPasswordInput] = useState("");
+  const [savingConfig, setSavingConfig] = useState(false);
+  const [configSuccessMsg, setConfigSuccessMsg] = useState<string | null>(null);
 
   const loadData = async () => {
     try {
@@ -119,6 +129,75 @@ export const EmailNotificationsTab: React.FC = () => {
     }
   };
 
+  const handleRetryAll = async () => {
+    setRetryingAll(true);
+    try {
+      const res = await apiRequest("/notifications/retry-all", { method: "POST" });
+      if (res.message) {
+        alert(res.message);
+      }
+      await loadData();
+    } catch (e: any) {
+      alert("Error al reintentar correos: " + e.message);
+    } finally {
+      setRetryingAll(false);
+    }
+  };
+
+  const handleSaveRefreshToken = async (e: React.FormEvent) => {
+    e.preventDefault();
+    if (!refreshTokenInput.trim()) return;
+    setSavingConfig(true);
+    setConfigSuccessMsg(null);
+    try {
+      const res = await apiRequest("/notifications/config", {
+        method: "POST",
+        body: JSON.stringify({
+          gmailUser: "eatsgo015@gmail.com",
+          gmailRefreshToken: refreshTokenInput.trim(),
+        }),
+      });
+      if (res.success) {
+        setConfigSuccessMsg("¡Gmail API activada correctamente!");
+        setRefreshTokenInput("");
+        loadData();
+      }
+    } catch (err: any) {
+      alert("Error al guardar: " + err.message);
+    } finally {
+      setSavingConfig(false);
+    }
+  };
+
+  const handleSaveAppPassword = async (e: React.FormEvent) => {
+    e.preventDefault();
+    if (!appPasswordInput.trim()) return;
+    setSavingConfig(true);
+    setConfigSuccessMsg(null);
+    try {
+      const res = await apiRequest("/notifications/config", {
+        method: "POST",
+        body: JSON.stringify({
+          smtpHost: "smtp.gmail.com",
+          smtpPort: 465,
+          smtpSecure: true,
+          smtpUser: "eatsgo015@gmail.com",
+          smtpPass: appPasswordInput.trim().replace(/\s+/g, ""),
+        }),
+      });
+      if (res.success) {
+        setConfigSuccessMsg("¡Gmail SMTP con Contraseña de Aplicación activado!");
+        setAppPasswordInput("");
+        loadData();
+      }
+    } catch (err: any) {
+      alert("Error al guardar: " + err.message);
+    } finally {
+      setSavingConfig(false);
+    }
+  };
+
+
   return (
     <div style={{ display: "flex", flexDirection: "column", gap: "24px" }}>
       {/* 1. STATUS CARD & OAUTH HEALTH */}
@@ -163,15 +242,20 @@ export const EmailNotificationsTab: React.FC = () => {
               color: stats?.gmailConfig.isReady ? "#10b981" : "#f59e0b",
               border: stats?.gmailConfig.isReady ? "1px solid rgba(16, 185, 129, 0.3)" : "1px solid rgba(245, 158, 11, 0.3)"
             }}>
-              {stats?.gmailConfig.isReady ? (
+              {stats?.gmailConfig.isOAuthReady ? (
                 <>
                   <ShieldCheck size={16} />
-                  <span>Gmail OAuth2 Activo ({stats.gmailConfig.user})</span>
+                  <span>Gmail API OAuth2 Activo ({stats.gmailConfig.user})</span>
+                </>
+              ) : stats?.gmailConfig.isGmailSmtp ? (
+                <>
+                  <ShieldCheck size={16} />
+                  <span>Gmail SMTP Activo ({stats.gmailConfig.user})</span>
                 </>
               ) : (
                 <>
                   <AlertTriangle size={16} />
-                  <span>Gmail OAuth2 Pendiente (Usando SMTP Fallback)</span>
+                  <span>Gmail Pendiente (Configurar OAuth2 o Contraseña de App)</span>
                 </>
               )}
             </div>
@@ -205,49 +289,172 @@ export const EmailNotificationsTab: React.FC = () => {
             marginTop: "20px",
             padding: "20px",
             borderRadius: "12px",
-            backgroundColor: "rgba(15, 23, 42, 0.6)",
-            border: "1px solid rgba(255, 255, 255, 0.1)",
+            backgroundColor: "#0f172a",
+            border: "1px solid rgba(255, 255, 255, 0.15)",
             color: "#e2e8f0",
             fontSize: "13px",
             lineHeight: 1.6
           }}>
-            <h4 style={{ margin: "0 0 10px 0", color: "#38bdf8", fontSize: "14px", display: "flex", alignItems: "center", gap: "6px" }}>
-              <Info size={16} /> Lo que debes hacer tú en Google Cloud Console para activar Gmail API con OAuth2:
-            </h4>
-            <ol style={{ paddingLeft: "20px", margin: "0 0 16px 0", display: "flex", flexDirection: "column", gap: "8px" }}>
-              <li>
-                <strong>Habilitar la Gmail API:</strong> Entra a <a href="https://console.cloud.google.com/apis/library/gmail.googleapis.com" target="_blank" rel="noreferrer" style={{ color: "#38bdf8" }}>Google Cloud Console &gt; Biblioteca</a> y pulsa <strong>"Habilitar"</strong> en Gmail API.
-              </li>
-              <li>
-                <strong>Pantalla de Consentimiento OAuth:</strong> En <em>OAuth consent screen</em>, agrega tu correo como usuario de prueba y añade el permiso/scope: <code>https://mail.google.com/</code> o <code>https://www.googleapis.com/auth/gmail.send</code>.
-              </li>
-              <li>
-                <strong>Crear ID de Cliente OAuth:</strong> En <em>Credenciales &gt; Crear credenciales &gt; ID de cliente de OAuth</em>:
-                Tipo: <strong>Aplicación web</strong>. En URIs de redireccionamiento autorizados agrega: <code>https://developers.google.com/oauthplayground</code>
-              </li>
-              <li>
-                <strong>Generar el Refresh Token permanente:</strong>
-                <br />
-                - Entra a <a href="https://developers.google.com/oauthplayground" target="_blank" rel="noreferrer" style={{ color: "#38bdf8" }}>Google OAuth2 Playground <ExternalLink size={12} style={{ display: "inline" }} /></a>.
-                <br />
-                - Arriba a la derecha pulsa el engranaje ⚙️, marca <strong>"Use your own OAuth credentials"</strong> y pega tu <strong>Client ID</strong> y <strong>Client Secret</strong>.
-                <br />
-                - A la izquierda en Paso 1, busca <strong>Gmail API v1</strong> y selecciona <code>https://mail.google.com/</code>.
-                <br />
-                - Haz clic en <strong>Authorize APIs</strong> e inicia sesión con el Gmail con el que enviarás correos.
-                <br />
-                - En Paso 2, haz clic en <strong>"Exchange authorization code for tokens"</strong> y copia el <strong>Refresh token</strong>.
-              </li>
-              <li>
-                <strong>Pegar en <code>backend/.env</code>:</strong>
-                <pre style={{ background: "#020617", padding: "10px 14px", borderRadius: "8px", margin: "8px 0 0 0", color: "#38bdf8" }}>
-{`GMAIL_USER="tucorreo@gmail.com"
-GMAIL_CLIENT_ID="tu-client-id.apps.googleusercontent.com"
-GMAIL_CLIENT_SECRET="tu-client-secret"
-GMAIL_REFRESH_TOKEN="tu-refresh-token"`}
-                </pre>
-              </li>
-            </ol>
+            {configSuccessMsg && (
+              <div style={{
+                padding: "12px 16px",
+                backgroundColor: "rgba(16, 185, 129, 0.15)",
+                border: "1px solid #10b981",
+                borderRadius: "8px",
+                color: "#34d399",
+                fontWeight: "600",
+                marginBottom: "16px"
+              }}>
+                ✓ {configSuccessMsg}
+              </div>
+            )}
+
+            <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fit, minmax(320px, 1fr))", gap: "20px" }}>
+              {/* OPCION 1: OAUTH2 GMAIL API */}
+              <div style={{ padding: "16px", backgroundColor: "#1e293b", borderRadius: "10px", border: "1px solid #334155" }}>
+                <h4 style={{ margin: "0 0 8px 0", color: "#38bdf8", fontSize: "14px", fontWeight: "700" }}>
+                  Opción 1: Activar Gmail API con OAuth2 (Oficial)
+                </h4>
+                <p style={{ fontSize: "12px", color: "#94a3b8", margin: "0 0 12px 0" }}>
+                  Conecta directamente con la API REST de Google sobre HTTPS (puerto 443).
+                </p>
+
+                <div style={{ display: "flex", flexDirection: "column", gap: "10px" }}>
+                  <a
+                    href="https://developers.google.com/oauthplayground"
+                    target="_blank"
+                    rel="noreferrer"
+                    style={{
+                      display: "flex",
+                      alignItems: "center",
+                      justifyContent: "center",
+                      gap: "6px",
+                      padding: "10px 14px",
+                      backgroundColor: "#0284c7",
+                      color: "#ffffff",
+                      borderRadius: "8px",
+                      fontWeight: "700",
+                      fontSize: "12px",
+                      textDecoration: "none"
+                    }}
+                  >
+                    1. Clic aquí para Autorizar con tu Gmail (eatsgo015@gmail.com) <ExternalLink size={13} />
+                  </a>
+
+                  <p style={{ fontSize: "11px", color: "#cbd5e1", margin: 0 }}>
+                    Configura las credenciales OAuth en el entorno del backend (<code>GMAIL_CLIENT_ID</code> y <code>GMAIL_CLIENT_SECRET</code>). En OAuth Playground, usa esas credenciales, autoriza Gmail y copia el <strong>Refresh token</strong>.
+                  </p>
+
+                  <form onSubmit={handleSaveRefreshToken} style={{ display: "flex", gap: "8px", marginTop: "4px" }}>
+                    <input
+                      type="text"
+                      placeholder="Pega el Refresh Token (1//0...)"
+                      value={refreshTokenInput}
+                      onChange={(e) => setRefreshTokenInput(e.target.value)}
+                      style={{
+                        flex: 1,
+                        padding: "8px 12px",
+                        borderRadius: "8px",
+                        border: "1px solid #475569",
+                        backgroundColor: "#0f172a",
+                        color: "#ffffff",
+                        fontSize: "12px"
+                      }}
+                    />
+                    <button
+                      type="submit"
+                      disabled={savingConfig || !refreshTokenInput.trim()}
+                      style={{
+                        padding: "8px 14px",
+                        backgroundColor: "#10b981",
+                        color: "#ffffff",
+                        border: "none",
+                        borderRadius: "8px",
+                        fontWeight: "700",
+                        fontSize: "12px",
+                        cursor: savingConfig ? "not-allowed" : "pointer",
+                        whiteSpace: "nowrap"
+                      }}
+                    >
+                      {savingConfig ? "Guardando..." : "Activar Gmail API"}
+                    </button>
+                  </form>
+                </div>
+              </div>
+
+              {/* OPCION 2: CONTRASEÑA DE APLICACION (GMAIL SMTP) */}
+              <div style={{ padding: "16px", backgroundColor: "#1e293b", borderRadius: "10px", border: "1px solid #334155" }}>
+                <h4 style={{ margin: "0 0 8px 0", color: "#f59e0b", fontSize: "14px", fontWeight: "700" }}>
+                  Opción 2: Usar Contraseña de Aplicación (Gmail SMTP)
+                </h4>
+                <p style={{ fontSize: "12px", color: "#94a3b8", margin: "0 0 12px 0" }}>
+                  Si prefieres SMTP con SSL en puerto 465 mediante contraseña de 16 caracteres.
+                </p>
+
+                <div style={{ display: "flex", flexDirection: "column", gap: "10px" }}>
+                  <a
+                    href="https://myaccount.google.com/apppasswords"
+                    target="_blank"
+                    rel="noreferrer"
+                    style={{
+                      display: "flex",
+                      alignItems: "center",
+                      justifyContent: "center",
+                      gap: "6px",
+                      padding: "10px 14px",
+                      backgroundColor: "rgba(245, 158, 11, 0.15)",
+                      color: "#fbbf24",
+                      border: "1px solid rgba(245, 158, 11, 0.3)",
+                      borderRadius: "8px",
+                      fontWeight: "700",
+                      fontSize: "12px",
+                      textDecoration: "none"
+                    }}
+                  >
+                    1. Crear Contraseña de Aplicación en Google <ExternalLink size={13} />
+                  </a>
+
+                  <p style={{ fontSize: "11px", color: "#cbd5e1", margin: 0 }}>
+                    Inicia sesión con <code>eatsgo015@gmail.com</code>, crea una contraseña con nombre "GoEats" y copia las 16 letras.
+                  </p>
+
+                  <form onSubmit={handleSaveAppPassword} style={{ display: "flex", gap: "8px", marginTop: "4px" }}>
+                    <input
+                      type="password"
+                      placeholder="Contraseña de 16 letras"
+                      value={appPasswordInput}
+                      onChange={(e) => setAppPasswordInput(e.target.value)}
+                      style={{
+                        flex: 1,
+                        padding: "8px 12px",
+                        borderRadius: "8px",
+                        border: "1px solid #475569",
+                        backgroundColor: "#0f172a",
+                        color: "#ffffff",
+                        fontSize: "12px"
+                      }}
+                    />
+                    <button
+                      type="submit"
+                      disabled={savingConfig || !appPasswordInput.trim()}
+                      style={{
+                        padding: "8px 14px",
+                        backgroundColor: "#f59e0b",
+                        color: "#0f172a",
+                        border: "none",
+                        borderRadius: "8px",
+                        fontWeight: "700",
+                        fontSize: "12px",
+                        cursor: savingConfig ? "not-allowed" : "pointer",
+                        whiteSpace: "nowrap"
+                      }}
+                    >
+                      {savingConfig ? "Guardando..." : "Activar Gmail SMTP"}
+                    </button>
+                  </form>
+                </div>
+              </div>
+            </div>
           </div>
         )}
 
@@ -432,6 +639,30 @@ GMAIL_REFRESH_TOKEN="tu-refresh-token"`}
               </button>
             </form>
 
+            {logs.some(l => l.status === "FAILED") && (
+              <button
+                onClick={handleRetryAll}
+                disabled={retryingAll}
+                style={{
+                  display: "flex",
+                  alignItems: "center",
+                  gap: "6px",
+                  padding: "8px 12px",
+                  borderRadius: "8px",
+                  border: "1px solid rgba(239, 68, 68, 0.3)",
+                  backgroundColor: "rgba(239, 68, 68, 0.15)",
+                  color: "#f87171",
+                  fontSize: "12px",
+                  fontWeight: 600,
+                  cursor: retryingAll ? "not-allowed" : "pointer"
+                }}
+                title="Reintentar todos los correos fallidos"
+              >
+                <RefreshCw size={12} className={retryingAll ? "animate-spin" : ""} />
+                <span>{retryingAll ? "Reintentando..." : "Reintentar Fallidos"}</span>
+              </button>
+            )}
+
             <button
               onClick={loadData}
               title="Refrescar"
@@ -516,19 +747,33 @@ GMAIL_REFRESH_TOKEN="tu-refresh-token"`}
                         </span>
                       )}
                       {log.status === "FAILED" && (
-                        <span style={{
-                          display: "inline-flex",
-                          alignItems: "center",
-                          gap: "4px",
-                          padding: "4px 8px",
-                          borderRadius: "9999px",
-                          fontSize: "11px",
-                          fontWeight: 700,
-                          backgroundColor: "rgba(239, 68, 68, 0.1)",
-                          color: "#ef4444",
-                        }} title={log.error || undefined}>
-                          <XCircle size={12} /> FALLÓ
-                        </span>
+                        <div>
+                          <span style={{
+                            display: "inline-flex",
+                            alignItems: "center",
+                            gap: "4px",
+                            padding: "4px 8px",
+                            borderRadius: "9999px",
+                            fontSize: "11px",
+                            fontWeight: 700,
+                            backgroundColor: "rgba(239, 68, 68, 0.1)",
+                            color: "#ef4444",
+                          }} title={log.error || undefined}>
+                            <XCircle size={12} /> FALLÓ
+                          </span>
+                          {log.error && (
+                            <div style={{
+                              fontSize: "10px",
+                              color: "#f87171",
+                              marginTop: "4px",
+                              maxWidth: "200px",
+                              lineHeight: 1.3,
+                              wordBreak: "break-word"
+                            }}>
+                              {log.error}
+                            </div>
+                          )}
+                        </div>
                       )}
                       {(log.status === "PENDING" || log.status === "SENDING") && (
                         <span style={{

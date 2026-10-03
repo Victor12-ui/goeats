@@ -4,6 +4,7 @@ import {
   registerOwner,
   registerStaff,
   getProfile,
+  updateProfile,
   registerCustomer,
   registerDriver,
   resetDatabase,
@@ -13,6 +14,7 @@ import {
   socialLogin,
   completeProfile,
   savePreferences,
+  deleteMyAccount,
 } from "./auth.controller";
 import { authMiddleware } from "../../middlewares/auth";
 import { tenantMiddleware } from "../../middlewares/tenant";
@@ -61,6 +63,9 @@ router.delete(
 
 // Get logged-in user profile
 router.get("/profile", authMiddleware, getProfile);
+router.put("/profile", authMiddleware, updateProfile);
+router.delete("/profile", authMiddleware, deleteMyAccount);
+router.delete("/account", authMiddleware, deleteMyAccount);
 
 // Reset database transactions (superadmin and owner only)
 router.post("/reset-database", authMiddleware, authorize([Role.SUPER_ADMIN, Role.RESTAURANT_OWNER]), resetDatabase);

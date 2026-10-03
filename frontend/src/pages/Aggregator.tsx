@@ -1,9 +1,29 @@
-import React, { useEffect, useState } from "react";
+import React, { useEffect, useState, useRef } from "react";
 import { Link, useNavigate } from "react-router-dom";
 import { apiRequest } from "../utils/api";
-import { Star, Heart, Search, ChevronRight, Compass, Utensils, LogOut, Menu as MenuIcon, X as XIcon, Sparkles, SlidersHorizontal } from "lucide-react";
+import {
+  Star,
+  Heart,
+  Search,
+  ChevronRight,
+  Compass,
+  Utensils,
+  LogOut,
+  Menu as MenuIcon,
+  X as XIcon,
+  Sparkles,
+  SlidersHorizontal,
+  User,
+  HelpCircle,
+  ChevronDown,
+  ShoppingBag,
+  Bike,
+  Store,
+  Shield
+} from "lucide-react";
 import { useAuth } from "../context/AuthContext";
 import { FoodPreferencesModal, FOOD_PREFERENCE_CATEGORIES } from "../components/FoodPreferencesModal";
+import { SupportModal } from "../components/SupportModal";
 
 interface PublicRestaurant {
   id: number;
@@ -111,6 +131,45 @@ export const Aggregator: React.FC = () => {
   // Food Preferences & Recommendations State
   const [preferencesModalOpen, setPreferencesModalOpen] = useState(false);
   const [userPreferences, setUserPreferences] = useState<string[]>([]);
+  const [supportModalOpen, setSupportModalOpen] = useState(false);
+
+  // User Profile Dropdown state
+  const [userDropdownOpen, setUserDropdownOpen] = useState(false);
+  const dropdownRef = useRef<HTMLDivElement>(null);
+
+  useEffect(() => {
+    const handleClickOutside = (event: MouseEvent) => {
+      if (dropdownRef.current && !dropdownRef.current.contains(event.target as Node)) {
+        setUserDropdownOpen(false);
+      }
+    };
+    if (userDropdownOpen) {
+      document.addEventListener("mousedown", handleClickOutside);
+    }
+    return () => {
+      document.removeEventListener("mousedown", handleClickOutside);
+    };
+  }, [userDropdownOpen]);
+
+  const getInitials = (name?: string) => {
+    if (!name) return "U";
+    const parts = name.trim().split(" ");
+    if (parts.length >= 2) return `${parts[0][0]}${parts[1][0]}`.toUpperCase();
+    return name.slice(0, 2).toUpperCase();
+  };
+
+  const getRoleLabel = (role?: string) => {
+    switch (role) {
+      case "CUSTOMER": return "Cliente";
+      case "MOTORIZADO": return "Repartidor";
+      case "RESTAURANT_OWNER": return "Restaurante";
+      case "CAJERO": return "Cajero";
+      case "MOZO": return "Mozo";
+      case "PRODUCCION": return "Cocina";
+      case "SUPER_ADMIN": return "Super Admin";
+      default: return role || "Usuario";
+    }
+  };
 
   const BRAND_LOGOS: Record<string, string> = {
     "el-artesanal": "/logos/el-artesanal.svg",
@@ -392,135 +451,450 @@ export const Aggregator: React.FC = () => {
         </div>
 
         <div className="mobile-hide" style={{ display: "flex", gap: "12px", alignItems: "center" }}>
-          <Link to="/plus" style={{
-            fontSize: "13px",
-            fontWeight: "700",
-            color: "#d97706",
-            padding: "8px 16px",
-            borderRadius: "30px",
-            backgroundColor: "rgba(251, 191, 36, 0.08)",
-            border: "1px solid #fbbf24",
-            textDecoration: "none",
-            display: "flex",
-            alignItems: "center",
-            gap: "4px",
-            transition: "all 0.2s ease"
-          }}>
-            Hazte Plus ✨
-          </Link>
-
-          {/* Preferences Quick Access Button */}
-          <button
-            onClick={() => setPreferencesModalOpen(true)}
+          <Link
+            to="/plus"
             style={{
               fontSize: "13px",
-              fontWeight: "600",
-              color: userPreferences.length > 0 ? "#ff4757" : "#475569",
-              padding: "8px 14px",
+              fontWeight: "700",
+              color: user?.isPlus ? "#b45309" : "#d97706",
+              padding: "8px 16px",
               borderRadius: "30px",
-              backgroundColor: userPreferences.length > 0 ? "rgba(255, 71, 87, 0.08)" : "#f8fafc",
-              border: userPreferences.length > 0 ? "1px solid rgba(255, 71, 87, 0.3)" : "1px solid #e2e8f0",
-              cursor: "pointer",
+              backgroundColor: user?.isPlus ? "#fef3c7" : "rgba(251, 191, 36, 0.08)",
+              border: "1px solid #fbbf24",
+              textDecoration: "none",
               display: "flex",
               alignItems: "center",
               gap: "6px",
               transition: "all 0.2s ease"
             }}
-            title="Personalizar gustos y recomendaciones"
           >
-            <Sparkles size={14} color="#ff4757" />
-            <span>{userPreferences.length > 0 ? `Mis Gustos (${userPreferences.length})` : "Mis Preferencias"}</span>
-          </button>
+            <Sparkles size={14} color="#d97706" />
+            {user?.isPlus ? "Miembro Plus ⭐" : "Hazte Plus ✨"}
+          </Link>
+
           {isAuthenticated && user ? (
-            <div style={{ display: "flex", alignItems: "center", gap: "16px" }}>
-              <div style={{ textAlign: "right" }}>
-                <div style={{ fontSize: "13px", fontWeight: "600", color: "#202124" }}>{user.name}</div>
-                <div style={{ fontSize: "10px", color: "#5f6368" }}>{user.role}</div>
-              </div>
-
-              {user.role === "CUSTOMER" && (
-                <Link to="/customer/dashboard" style={{
-                  fontSize: "13px",
-                  fontWeight: "600",
-                  color: "#ff4757",
-                  padding: "8px 16px",
-                  borderRadius: "30px",
-                  border: "1px solid #ff4757",
-                  textDecoration: "none",
-                  transition: "all 0.2s ease"
-                }}>
-                  Mis Pedidos 🍔
-                </Link>
-              )}
-
-              {user.role === "MOTORIZADO" && (
-                <Link to="/delivery" style={{
-                  fontSize: "13px",
-                  fontWeight: "600",
-                  color: "#ff4757",
-                  padding: "8px 16px",
-                  borderRadius: "30px",
-                  border: "1px solid #ff4757",
-                  textDecoration: "none",
-                  transition: "all 0.2s ease"
-                }}>
-                  Entregas 🛵
-                </Link>
-              )}
-
-              {(user.role === "RESTAURANT_OWNER" || user.role === "CAJERO" || user.role === "MOZO" || user.role === "PRODUCCION") && (
-                <Link to="/pos" style={{
-                  fontSize: "13px",
-                  fontWeight: "600",
-                  color: "#ff4757",
-                  padding: "8px 16px",
-                  borderRadius: "30px",
-                  border: "1px solid #ff4757",
-                  textDecoration: "none",
-                  transition: "all 0.2s ease"
-                }}>
-                  Ir al POS 🖥️
-                </Link>
-              )}
-
-              {user.role === "SUPER_ADMIN" && (
-                <Link to="/admin/restaurants" style={{
-                  fontSize: "13px",
-                  fontWeight: "600",
-                  color: "#ff4757",
-                  padding: "8px 16px",
-                  borderRadius: "30px",
-                  border: "1px solid #ff4757",
-                  textDecoration: "none",
-                  transition: "all 0.2s ease"
-                }}>
-                  Panel Admin 🛡️
-                </Link>
-              )}
-
+            <div ref={dropdownRef} style={{ position: "relative" }}>
+              {/* User Profile Pill Trigger */}
               <button
-                onClick={logout}
+                type="button"
+                onClick={() => setUserDropdownOpen(!userDropdownOpen)}
                 style={{
                   display: "flex",
                   alignItems: "center",
-                  gap: "4px",
-                  padding: "8px 16px",
+                  gap: "10px",
+                  padding: "5px 14px 5px 6px",
                   borderRadius: "30px",
-                  backgroundColor: "rgba(255, 71, 87, 0.1)",
-                  border: "1px solid rgba(255, 71, 87, 0.2)",
-                  color: "var(--accent-primary)",
+                  backgroundColor: userDropdownOpen ? "#f8fafc" : "#ffffff",
+                  border: "1px solid #e2e8f0",
+                  cursor: "pointer",
+                  transition: "all 0.2s ease",
+                  boxShadow: "0 1px 3px rgba(0,0,0,0.04)"
+                }}
+                onMouseEnter={(e) => (e.currentTarget.style.borderColor = "#cbd5e1")}
+                onMouseLeave={(e) => (e.currentTarget.style.borderColor = "#e2e8f0")}
+              >
+                <div
+                  style={{
+                    width: "32px",
+                    height: "32px",
+                    borderRadius: "50%",
+                    background: "linear-gradient(135deg, #ff4757 0%, #ff6b81 100%)",
+                    color: "#ffffff",
+                    display: "flex",
+                    alignItems: "center",
+                    justifyContent: "center",
+                    fontSize: "12px",
+                    fontWeight: "700",
+                    flexShrink: 0,
+                    boxShadow: "0 2px 6px rgba(255, 71, 87, 0.25)"
+                  }}
+                >
+                  {getInitials(user.name)}
+                </div>
+
+                <div style={{ textAlign: "left", lineHeight: 1.25 }}>
+                  <div
+                    style={{
+                      fontSize: "13px",
+                      fontWeight: 600,
+                      color: "#0f172a",
+                      maxWidth: "130px",
+                      whiteSpace: "nowrap",
+                      overflow: "hidden",
+                      textOverflow: "ellipsis"
+                    }}
+                  >
+                    {user.name}
+                  </div>
+                  <div style={{ fontSize: "11px", color: "#64748b" }}>
+                    {getRoleLabel(user.role)}
+                  </div>
+                </div>
+
+                <ChevronDown
+                  size={14}
+                  color="#64748b"
+                  style={{
+                    transform: userDropdownOpen ? "rotate(180deg)" : "rotate(0deg)",
+                    transition: "transform 0.2s ease"
+                  }}
+                />
+              </button>
+
+              {/* User Dropdown Menu Card */}
+              {userDropdownOpen && (
+                <div
+                  style={{
+                    position: "absolute",
+                    top: "calc(100% + 8px)",
+                    right: 0,
+                    width: "260px",
+                    backgroundColor: "#ffffff",
+                    borderRadius: "16px",
+                    border: "1px solid #e2e8f0",
+                    boxShadow: "0 12px 30px rgba(0, 0, 0, 0.12)",
+                    zIndex: 1000,
+                    overflow: "hidden",
+                  }}
+                >
+                  {/* User Profile Header */}
+                  <div style={{ padding: "16px", backgroundColor: "#f8fafc", borderBottom: "1px solid #e2e8f0" }}>
+                    <div style={{ display: "flex", alignItems: "center", gap: "10px" }}>
+                      <div
+                        style={{
+                          width: "38px",
+                          height: "38px",
+                          borderRadius: "50%",
+                          background: "linear-gradient(135deg, #ff4757 0%, #ff6b81 100%)",
+                          color: "#ffffff",
+                          display: "flex",
+                          alignItems: "center",
+                          justifyContent: "center",
+                          fontSize: "14px",
+                          fontWeight: "700",
+                          flexShrink: 0
+                        }}
+                      >
+                        {getInitials(user.name)}
+                      </div>
+                      <div style={{ overflow: "hidden" }}>
+                        <div
+                          style={{
+                            fontSize: "14px",
+                            fontWeight: "700",
+                            color: "#0f172a",
+                            whiteSpace: "nowrap",
+                            overflow: "hidden",
+                            textOverflow: "ellipsis"
+                          }}
+                        >
+                          {user.name}
+                        </div>
+                        <div
+                          style={{
+                            fontSize: "12px",
+                            color: "#64748b",
+                            whiteSpace: "nowrap",
+                            overflow: "hidden",
+                            textOverflow: "ellipsis"
+                          }}
+                        >
+                          {user.email || user.username}
+                        </div>
+                      </div>
+                    </div>
+                    <div style={{ marginTop: "10px", display: "flex", gap: "6px" }}>
+                      <span
+                        style={{
+                          display: "inline-block",
+                          padding: "3px 8px",
+                          borderRadius: "12px",
+                          fontSize: "11px",
+                          fontWeight: "600",
+                          backgroundColor: "#eff6ff",
+                          color: "#2563eb",
+                          border: "1px solid #bfdbfe"
+                        }}
+                      >
+                        {getRoleLabel(user.role)}
+                      </span>
+                      {user.isPlus && (
+                        <span
+                          style={{
+                            display: "inline-block",
+                            padding: "3px 8px",
+                            borderRadius: "12px",
+                            fontSize: "11px",
+                            fontWeight: "600",
+                            backgroundColor: "#fef3c7",
+                            color: "#b45309",
+                            border: "1px solid #fde68a"
+                          }}
+                        >
+                          Socio Plus ⭐
+                        </span>
+                      )}
+                    </div>
+                  </div>
+
+                  {/* Dropdown Options */}
+                  <div style={{ padding: "8px" }}>
+                    {user.role === "CUSTOMER" && (
+                      <>
+                        <Link
+                          to="/customer/dashboard"
+                          onClick={() => setUserDropdownOpen(false)}
+                          style={{
+                            display: "flex",
+                            alignItems: "center",
+                            gap: "10px",
+                            padding: "10px 12px",
+                            borderRadius: "10px",
+                            fontSize: "13px",
+                            fontWeight: "600",
+                            color: "#1e293b",
+                            textDecoration: "none",
+                            transition: "background 0.15s ease"
+                          }}
+                          onMouseEnter={(e) => (e.currentTarget.style.backgroundColor = "#f1f5f9")}
+                          onMouseLeave={(e) => (e.currentTarget.style.backgroundColor = "transparent")}
+                        >
+                          <ShoppingBag size={16} color="#ff4757" />
+                          <span>Mis Pedidos</span>
+                        </Link>
+
+                        <Link
+                          to="/customer/dashboard?tab=profile"
+                          onClick={() => setUserDropdownOpen(false)}
+                          style={{
+                            display: "flex",
+                            alignItems: "center",
+                            gap: "10px",
+                            padding: "10px 12px",
+                            borderRadius: "10px",
+                            fontSize: "13px",
+                            fontWeight: "600",
+                            color: "#1e293b",
+                            textDecoration: "none",
+                            transition: "background 0.15s ease"
+                          }}
+                          onMouseEnter={(e) => (e.currentTarget.style.backgroundColor = "#f1f5f9")}
+                          onMouseLeave={(e) => (e.currentTarget.style.backgroundColor = "transparent")}
+                        >
+                          <User size={16} color="#64748b" />
+                          <span>Mi Perfil</span>
+                        </Link>
+
+                        <button
+                          type="button"
+                          onClick={() => {
+                            setUserDropdownOpen(false);
+                            setPreferencesModalOpen(true);
+                          }}
+                          style={{
+                            width: "100%",
+                            display: "flex",
+                            alignItems: "center",
+                            justifyContent: "space-between",
+                            padding: "10px 12px",
+                            borderRadius: "10px",
+                            fontSize: "13px",
+                            fontWeight: "600",
+                            color: "#1e293b",
+                            backgroundColor: "transparent",
+                            border: "none",
+                            cursor: "pointer",
+                            textAlign: "left",
+                            transition: "background 0.15s ease"
+                          }}
+                          onMouseEnter={(e) => (e.currentTarget.style.backgroundColor = "#f1f5f9")}
+                          onMouseLeave={(e) => (e.currentTarget.style.backgroundColor = "transparent")}
+                        >
+                          <div style={{ display: "flex", alignItems: "center", gap: "10px" }}>
+                            <Sparkles size={16} color="#d97706" />
+                            <span>Mis Preferencias</span>
+                          </div>
+                          {userPreferences.length > 0 && (
+                            <span
+                              style={{
+                                fontSize: "11px",
+                                fontWeight: "700",
+                                backgroundColor: "#fef3c7",
+                                color: "#b45309",
+                                padding: "2px 8px",
+                                borderRadius: "10px"
+                              }}
+                            >
+                              {userPreferences.length}
+                            </span>
+                          )}
+                        </button>
+                      </>
+                    )}
+
+                    {user.role === "MOTORIZADO" && (
+                      <Link
+                        to="/delivery"
+                        onClick={() => setUserDropdownOpen(false)}
+                        style={{
+                          display: "flex",
+                          alignItems: "center",
+                          gap: "10px",
+                          padding: "10px 12px",
+                          borderRadius: "10px",
+                          fontSize: "13px",
+                          fontWeight: "600",
+                          color: "#1e293b",
+                          textDecoration: "none",
+                          transition: "background 0.15s ease"
+                        }}
+                        onMouseEnter={(e) => (e.currentTarget.style.backgroundColor = "#f1f5f9")}
+                        onMouseLeave={(e) => (e.currentTarget.style.backgroundColor = "transparent")}
+                      >
+                        <Bike size={16} color="#10b981" />
+                        <span>Panel de Repartos</span>
+                      </Link>
+                    )}
+
+                    {(user.role === "RESTAURANT_OWNER" || user.role === "CAJERO" || user.role === "MOZO" || user.role === "PRODUCCION") && (
+                      <Link
+                        to="/pos"
+                        onClick={() => setUserDropdownOpen(false)}
+                        style={{
+                          display: "flex",
+                          alignItems: "center",
+                          gap: "10px",
+                          padding: "10px 12px",
+                          borderRadius: "10px",
+                          fontSize: "13px",
+                          fontWeight: "600",
+                          color: "#1e293b",
+                          textDecoration: "none",
+                          transition: "background 0.15s ease"
+                        }}
+                        onMouseEnter={(e) => (e.currentTarget.style.backgroundColor = "#f1f5f9")}
+                        onMouseLeave={(e) => (e.currentTarget.style.backgroundColor = "transparent")}
+                      >
+                        <Store size={16} color="#f59e0b" />
+                        <span>Sistema POS</span>
+                      </Link>
+                    )}
+
+                    {user.role === "SUPER_ADMIN" && (
+                      <Link
+                        to="/admin/restaurants"
+                        onClick={() => setUserDropdownOpen(false)}
+                        style={{
+                          display: "flex",
+                          alignItems: "center",
+                          gap: "10px",
+                          padding: "10px 12px",
+                          borderRadius: "10px",
+                          fontSize: "13px",
+                          fontWeight: "600",
+                          color: "#1e293b",
+                          textDecoration: "none",
+                          transition: "background 0.15s ease"
+                        }}
+                        onMouseEnter={(e) => (e.currentTarget.style.backgroundColor = "#f1f5f9")}
+                        onMouseLeave={(e) => (e.currentTarget.style.backgroundColor = "transparent")}
+                      >
+                        <Shield size={16} color="#8b5cf6" />
+                        <span>Panel Super Admin</span>
+                      </Link>
+                    )}
+
+                    <div style={{ height: "1px", backgroundColor: "#f1f5f9", margin: "6px 0" }} />
+
+                    {/* Centro de Ayuda */}
+                    <button
+                      type="button"
+                      onClick={() => {
+                        setUserDropdownOpen(false);
+                        setSupportModalOpen(true);
+                      }}
+                      style={{
+                        width: "100%",
+                        display: "flex",
+                        alignItems: "center",
+                        gap: "10px",
+                        padding: "10px 12px",
+                        borderRadius: "10px",
+                        fontSize: "13px",
+                        fontWeight: "600",
+                        color: "#1e293b",
+                        backgroundColor: "transparent",
+                        border: "none",
+                        cursor: "pointer",
+                        textAlign: "left",
+                        transition: "background 0.15s ease"
+                      }}
+                      onMouseEnter={(e) => (e.currentTarget.style.backgroundColor = "#f1f5f9")}
+                      onMouseLeave={(e) => (e.currentTarget.style.backgroundColor = "transparent")}
+                    >
+                      <HelpCircle size={16} color="#3b82f6" />
+                      <span>Ayuda y Soporte</span>
+                    </button>
+
+                    <div style={{ height: "1px", backgroundColor: "#f1f5f9", margin: "6px 0" }} />
+
+                    {/* Cerrar Sesion */}
+                    <button
+                      type="button"
+                      onClick={() => {
+                        setUserDropdownOpen(false);
+                        logout();
+                      }}
+                      style={{
+                        width: "100%",
+                        display: "flex",
+                        alignItems: "center",
+                        gap: "10px",
+                        padding: "10px 12px",
+                        borderRadius: "10px",
+                        fontSize: "13px",
+                        fontWeight: "600",
+                        color: "#ef4444",
+                        backgroundColor: "transparent",
+                        border: "none",
+                        cursor: "pointer",
+                        textAlign: "left",
+                        transition: "background 0.15s ease"
+                      }}
+                      onMouseEnter={(e) => (e.currentTarget.style.backgroundColor = "#fef2f2")}
+                      onMouseLeave={(e) => (e.currentTarget.style.backgroundColor = "transparent")}
+                    >
+                      <LogOut size={16} color="#ef4444" />
+                      <span>Cerrar Sesión</span>
+                    </button>
+                  </div>
+                </div>
+              )}
+            </div>
+          ) : (
+            <div style={{ display: "flex", alignItems: "center", gap: "10px" }}>
+              <button
+                onClick={() => setSupportModalOpen(true)}
+                style={{
+                  display: "flex",
+                  alignItems: "center",
+                  gap: "6px",
+                  padding: "8px 14px",
+                  borderRadius: "30px",
+                  backgroundColor: "transparent",
+                  border: "1px solid #cbd5e1",
+                  color: "#475569",
                   cursor: "pointer",
                   fontSize: "12px",
                   fontWeight: 600,
                   transition: "all 0.2s ease"
                 }}
+                title="Centro de Ayuda & Soporte"
               >
-                <LogOut size={13} style={{ marginRight: "4px" }} />
-                Salir
+                <HelpCircle size={14} />
+                Ayuda
               </button>
-            </div>
-          ) : (
-            <>
+
               <Link to="/login" style={{
                 fontSize: "13px",
                 fontWeight: "600",
@@ -533,7 +907,7 @@ export const Aggregator: React.FC = () => {
               }}>
                 Iniciar Sesión
               </Link>
-            </>
+            </div>
           )}
         </div>
 
@@ -616,26 +990,50 @@ export const Aggregator: React.FC = () => {
               {isAuthenticated && user ? (
                 <>
                   {user.role === "CUSTOMER" && (
-                    <Link
-                      to="/customer/dashboard"
-                      onClick={() => setMenuOpen(false)}
-                      style={{
-                        display: "flex",
-                        alignItems: "center",
-                        justifyContent: "center",
-                        gap: "10px",
-                        fontSize: "14px",
-                        fontWeight: 600,
-                        padding: "12px 16px",
-                        borderRadius: "30px",
-                        color: "#ff4757",
-                        backgroundColor: "rgba(255, 71, 87, 0.05)",
-                        border: "1px solid rgba(255, 71, 87, 0.15)",
-                        textDecoration: "none"
-                      }}
-                    >
-                      Mis Pedidos 🍔
-                    </Link>
+                    <>
+                      <Link
+                        to="/customer/dashboard"
+                        onClick={() => setMenuOpen(false)}
+                        style={{
+                          display: "flex",
+                          alignItems: "center",
+                          justifyContent: "center",
+                          gap: "10px",
+                          fontSize: "14px",
+                          fontWeight: 600,
+                          padding: "12px 16px",
+                          borderRadius: "30px",
+                          color: "#ff4757",
+                          backgroundColor: "rgba(255, 71, 87, 0.05)",
+                          border: "1px solid rgba(255, 71, 87, 0.15)",
+                          textDecoration: "none"
+                        }}
+                      >
+                        Mis Pedidos 🍔
+                      </Link>
+
+                      <Link
+                        to="/customer/dashboard?tab=profile"
+                        onClick={() => setMenuOpen(false)}
+                        style={{
+                          display: "flex",
+                          alignItems: "center",
+                          justifyContent: "center",
+                          gap: "10px",
+                          fontSize: "14px",
+                          fontWeight: 600,
+                          padding: "12px 16px",
+                          borderRadius: "30px",
+                          color: "#1e293b",
+                          backgroundColor: "#f8fafc",
+                          border: "1px solid #cbd5e1",
+                          textDecoration: "none"
+                        }}
+                      >
+                        <User size={16} color="#ff4757" />
+                        Mi Perfil e Información
+                      </Link>
+                    </>
                   )}
 
                   {user.role === "MOTORIZADO" && (
@@ -728,7 +1126,29 @@ export const Aggregator: React.FC = () => {
                   Iniciar Sesión
                 </Link>
               )}
+
+              <button
+                onClick={() => { setMenuOpen(false); setSupportModalOpen(true); }}
+                style={{
+                  display: "flex",
+                  alignItems: "center",
+                  justifyContent: "center",
+                  gap: "8px",
+                  fontSize: "14px",
+                  fontWeight: 600,
+                  color: "#3b82f6",
+                  padding: "12px 16px",
+                  borderRadius: "30px",
+                  backgroundColor: "rgba(59, 130, 246, 0.08)",
+                  border: "1px solid rgba(59, 130, 246, 0.2)",
+                  cursor: "pointer"
+                }}
+              >
+                <HelpCircle size={16} />
+                Centro de Ayuda & Soporte
+              </button>
             </div>
+
 
             {isAuthenticated && user && (
               <div style={{
@@ -1810,6 +2230,22 @@ export const Aggregator: React.FC = () => {
           <Link to="/login" style={{ color: "#5f6368", textDecoration: "underline" }}>
             Panel de Control POS
           </Link>
+          <span style={{ color: "#cbd5e1" }}>|</span>
+          <button
+            onClick={() => setSupportModalOpen(true)}
+            style={{
+              background: "none",
+              border: "none",
+              color: "#3b82f6",
+              fontWeight: "600",
+              textDecoration: "underline",
+              cursor: "pointer",
+              fontSize: "13px",
+              padding: 0
+            }}
+          >
+            Centro de Ayuda & Soporte
+          </button>
         </div>
       </footer>
 
@@ -1818,6 +2254,19 @@ export const Aggregator: React.FC = () => {
         isOpen={preferencesModalOpen}
         onClose={() => setPreferencesModalOpen(false)}
         onPreferencesUpdated={(newPrefs) => setUserPreferences(newPrefs)}
+      />
+
+      {/* Support & Help Center Modal */}
+      <SupportModal
+        isOpen={supportModalOpen}
+        onClose={() => setSupportModalOpen(false)}
+        defaultRole={
+          user?.role === "MOTORIZADO" 
+            ? "MOTORIZADO" 
+            : (user?.role === "RESTAURANT_OWNER" || user?.role === "CAJERO" || user?.role === "MOZO" || user?.role === "PRODUCCION")
+              ? "RESTAURANT" 
+              : "CUSTOMER"
+        }
       />
     </div>
   );

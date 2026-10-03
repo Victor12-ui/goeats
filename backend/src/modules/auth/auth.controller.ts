@@ -8,6 +8,7 @@ import { Role } from "@prisma/client";
 import { sendWelcomeEmail } from "../../services/email";
 import { NotificationService } from "../notifications/notification.service";
 import { verifyGoogleToken, verifyFacebookToken } from "../../services/oauth";
+import { safeDeleteUser } from "./user-cleanup.service";
 
 
 const SALT_ROUNDS = 10;
@@ -332,12 +333,103 @@ export async function getProfile(req: Request, res: Response, next: NextFunction
         username: user.username,
         name: user.name,
         email: user.email,
+        phone: (user as any).phone || null,
         role: user.role,
         cedula: user.cedula || null,
         walletBalance: user.walletBalance,
         restaurantId: user.restaurantId,
         restaurant: user.restaurant,
         isPlus: user.isPlus,
+        createdAt: user.createdAt,
+        preferences,
+      },
+    });
+  } catch (error) {
+    next(error);
+  }
+}
+
+export async function updateProfile(req: Request, res: Response, next: NextFunction) {
+  try {
+    if (!req.user) {
+      return res.status(401).json({ success: false, message: "No autorizado" });
+    }
+
+    const userId = req.user.userId;
+    const { name, phone, cedula, password } = req.body;
+
+    const existingUser = await prisma.user.findUnique({
+      where: { id: userId },
+      include: { restaurant: true },
+    });
+
+    if (!existingUser) {
+      return res.status(404).json({ success: false, message: "Usuario no encontrado" });
+    }
+
+    // Validar unicidad de cédula si se proporciona una nueva
+    if (cedula && cedula.trim() !== "" && cedula.trim() !== existingUser.cedula) {
+      const cedulaCheck = await prisma.user.findFirst({
+        where: {
+          cedula: cedula.trim(),
+          NOT: { id: userId },
+        },
+      });
+      if (cedulaCheck) {
+        return res.status(400).json({
+          success: false,
+          message: "El número de identificación o cédula ya se encuentra registrado con otra cuenta.",
+        });
+      }
+    }
+
+    const dataToUpdate: any = {};
+    if (name !== undefined && name.trim() !== "") {
+      dataToUpdate.name = name.trim();
+    }
+    if (phone !== undefined) {
+      dataToUpdate.phone = phone ? phone.trim() : null;
+    }
+    if (cedula !== undefined) {
+      dataToUpdate.cedula = cedula ? cedula.trim() : null;
+    }
+    if (password && password.trim() !== "") {
+      dataToUpdate.password = await bcrypt.hash(password.trim(), SALT_ROUNDS);
+    }
+
+    const updatedUser = await prisma.user.update({
+      where: { id: userId },
+      data: dataToUpdate,
+      include: { restaurant: true },
+    });
+
+    const rawPreferences = (updatedUser as any).preferencesJson;
+    let preferences: string[] = [];
+    if (rawPreferences) {
+      try {
+        preferences = JSON.parse(rawPreferences);
+      } catch (e) {
+        preferences = [];
+      }
+    }
+
+    return res.status(200).json({
+      success: true,
+      message: "Perfil actualizado exitosamente",
+      user: {
+        id: updatedUser.id,
+        username: updatedUser.username,
+        name: updatedUser.name,
+        email: updatedUser.email,
+        phone: (updatedUser as any).phone || null,
+        cedula: updatedUser.cedula || null,
+        role: updatedUser.role,
+        walletBalance: updatedUser.walletBalance,
+        restaurantId: updatedUser.restaurantId,
+        restaurantName: updatedUser.restaurant?.name || null,
+        restaurantSlug: updatedUser.restaurant?.slug || null,
+        isPlus: updatedUser.isPlus,
+        createdAt: updatedUser.createdAt,
         preferences,
       },
     });
@@ -823,6 +915,47 @@ export async function completeProfile(req: Request, res: Response, next: NextFun
       success: true,
       message: "Preferencias guardadas con éxito",
       preferences: preferences || [],
+    });
+  } catch (error) {
+    next(error);
+  }
+}
+
+export async function deleteMyAccount(req: Request, res: Response, next: NextFunction) {
+  try {
+    const userId = (req as any).user?.userId;
+    if (!userId) {
+      return res.status(401).json({ success: false, message: "No autorizado" });
+    }
+
+    const user = await prisma.user.findUnique({
+      where: { id: userId },
+      select: { id: true, username: true, role: true },
+    });
+
+    if (!user) {
+      return res.status(404).json({ success: false, message: "Usuario no encontrado" });
+    }
+
+    // Proteger cuenta SUPER_ADMIN para evitar dejar el sistema sin administrador
+    if (user.role === Role.SUPER_ADMIN) {
+      const superAdminCount = await prisma.user.count({ where: { role: Role.SUPER_ADMIN } });
+      if (superAdminCount <= 1) {
+        return res.status(403).json({
+          success: false,
+          message: "No puedes eliminar la única cuenta de Super Administrador del sistema.",
+        });
+      }
+    }
+
+    const result = await safeDeleteUser(userId);
+    if (!result.success) {
+      return res.status(500).json({ success: false, message: result.error || "Error al eliminar la cuenta" });
+    }
+
+    return res.status(200).json({
+      success: true,
+      message: "Tu cuenta ha sido eliminada permanentemente.",
     });
   } catch (error) {
     next(error);

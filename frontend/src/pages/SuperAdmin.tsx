@@ -21,7 +21,12 @@ import {
   Trash2,
   Edit2,
   Eye,
-  EyeOff
+  EyeOff,
+  Clock,
+  AlertTriangle,
+  Check,
+  X,
+  Phone,
 } from "lucide-react";
 import { EmailNotificationsTab } from "../components/admin/EmailNotificationsTab";
 
@@ -33,12 +38,16 @@ interface Restaurant {
   address: string | null;
   phone: string | null;
   isActive: boolean;
+  status?: "PENDING" | "UNDER_REVIEW" | "APPROVED" | "ACTIVE" | "REJECTED" | "SUSPENDED";
   createdAt: string;
   users: Array<{
     id: number;
     username: string;
     name: string;
+    email?: string;
+    phone?: string;
     role: string;
+    isActive?: boolean;
   }>;
 }
 
@@ -67,7 +76,15 @@ export const SuperAdmin: React.FC = () => {
 
   // New tab state
   const [searchParams] = useSearchParams();
-  const activeTab = (searchParams.get("tab") || "restaurants") as "restaurants" | "delivery" | "wallet" | "saas_customers" | "saas_plans" | "saas_orders" | "saas_categories" | "emails";
+  const activeTab = (searchParams.get("tab") || "restaurants") as "restaurants" | "approvals" | "delivery" | "wallet" | "saas_customers" | "saas_plans" | "saas_orders" | "saas_categories" | "emails";
+
+  // Restaurant Approval states
+  const [restaurantStatusFilter, setRestaurantStatusFilter] = useState<"ALL" | "PENDING" | "UNDER_REVIEW" | "APPROVED" | "REJECTED">("ALL");
+  const [selectedApproveRestaurant, setSelectedApproveRestaurant] = useState<Restaurant | null>(null);
+  const [approvingRestaurant, setApprovingRestaurant] = useState(false);
+  const [selectedRejectRestaurant, setSelectedRejectRestaurant] = useState<Restaurant | null>(null);
+  const [rejectReason, setRejectReason] = useState("");
+  const [rejectingRestaurant, setRejectingRestaurant] = useState(false);
 
   const [drivers, setDrivers] = useState<any[]>([]);
   const [rates, setRates] = useState<any[]>([]);
@@ -341,6 +358,30 @@ export const SuperAdmin: React.FC = () => {
     }
   };
 
+  const [deletingCustomerId, setDeletingCustomerId] = useState<number | null>(null);
+
+  const handleDeleteCustomer = async (customerId: number, customerName: string, customerUsername: string) => {
+    const confirmMessage = `¿Estás seguro de que deseas eliminar permanentemente al cliente "${customerName}" (@${customerUsername})?\n\nEsta acción borrará la cuenta del cliente de forma irreversible.`;
+    if (!window.confirm(confirmMessage)) {
+      return;
+    }
+
+    try {
+      setDeletingCustomerId(customerId);
+      const res = await apiRequest(`/saas/customers/${customerId}`, {
+        method: "DELETE",
+      });
+      if (res.success) {
+        alert(res.message || "Cliente eliminado exitosamente.");
+        loadSaasCustomers();
+      }
+    } catch (err: any) {
+      alert("Error al eliminar cliente: " + (err.message || "Ocurrió un error inesperado"));
+    } finally {
+      setDeletingCustomerId(null);
+    }
+  };
+
   const handleApproveSaaSOrder = async (orderId: number) => {
     try {
       const res = await apiRequest(`/saas/orders/${orderId}/approve`, {
@@ -545,8 +586,11 @@ export const SuperAdmin: React.FC = () => {
   }, [user, navigate]);
 
   useEffect(() => {
-    if (activeTab === "restaurants") {
+    if (activeTab === "restaurants" || activeTab === "approvals") {
       loadRestaurants();
+      if (activeTab === "approvals") {
+        setRestaurantStatusFilter("PENDING");
+      }
     } else if (activeTab === "delivery") {
       loadRates();
     } else if (activeTab === "wallet") {
@@ -587,6 +631,74 @@ export const SuperAdmin: React.FC = () => {
     }
   };
 
+  const handleApproveRestaurant = async (restaurant: Restaurant) => {
+    setApprovingRestaurant(true);
+    try {
+      const res = await apiRequest(`/restaurants/${restaurant.id}/approve`, {
+        method: "POST"
+      });
+      if (res.success) {
+        setRestaurants(prev =>
+          prev.map(r => r.id === restaurant.id ? {
+            ...r,
+            status: "APPROVED",
+            isActive: true,
+            users: r.users.map(u => ({ ...u, isActive: true }))
+          } : r)
+        );
+        setSelectedApproveRestaurant(null);
+        alert(res.message || `¡Restaurante "${restaurant.name}" aprobado exitosamente!`);
+      }
+    } catch (err: any) {
+      alert(err.message || "Error al aprobar el restaurante");
+    } finally {
+      setApprovingRestaurant(false);
+    }
+  };
+
+  const handleRejectRestaurant = async (restaurant: Restaurant) => {
+    setRejectingRestaurant(true);
+    try {
+      const res = await apiRequest(`/restaurants/${restaurant.id}/reject`, {
+        method: "POST",
+        body: JSON.stringify({ reason: rejectReason })
+      });
+      if (res.success) {
+        setRestaurants(prev =>
+          prev.map(r => r.id === restaurant.id ? {
+            ...r,
+            status: "REJECTED",
+            isActive: false,
+            users: r.users.map(u => ({ ...u, isActive: false }))
+          } : r)
+        );
+        setSelectedRejectRestaurant(null);
+        setRejectReason("");
+        alert(res.message || `Restaurante "${restaurant.name}" rechazado.`);
+      }
+    } catch (err: any) {
+      alert(err.message || "Error al rechazar el restaurante");
+    } finally {
+      setRejectingRestaurant(false);
+    }
+  };
+
+  const handleReviewRestaurant = async (restaurant: Restaurant) => {
+    try {
+      const res = await apiRequest(`/restaurants/${restaurant.id}/review`, {
+        method: "POST"
+      });
+      if (res.success) {
+        setRestaurants(prev =>
+          prev.map(r => r.id === restaurant.id ? { ...r, status: "UNDER_REVIEW" } : r)
+        );
+        alert(res.message || `Restaurante "${restaurant.name}" puesto en revisión.`);
+      }
+    } catch (err: any) {
+      alert(err.message || "Error al poner en revisión el restaurante");
+    }
+  };
+
   const handleRegisterRestaurant = async (e: React.FormEvent) => {
     e.preventDefault();
     setModalError(null);
@@ -624,10 +736,34 @@ export const SuperAdmin: React.FC = () => {
     }
   };
 
-  const filteredRestaurants = restaurants.filter(r =>
-    r.name.toLowerCase().includes(searchTerm.toLowerCase()) ||
-    r.slug.toLowerCase().includes(searchTerm.toLowerCase())
-  );
+  const pendingRestaurantsCount = restaurants.filter(r => r.status === "PENDING").length;
+  const reviewRestaurantsCount = restaurants.filter(r => r.status === "UNDER_REVIEW").length;
+  const approvedRestaurantsCount = restaurants.filter(r => r.status === "APPROVED" || r.status === "ACTIVE" || (!r.status && r.isActive)).length;
+  const rejectedRestaurantsCount = restaurants.filter(r => r.status === "REJECTED" || r.status === "SUSPENDED").length;
+
+  const filteredRestaurants = restaurants.filter(r => {
+    const s = searchTerm.toLowerCase();
+    const matchesSearch = r.name.toLowerCase().includes(s) ||
+      r.slug.toLowerCase().includes(s) ||
+      (r.address && r.address.toLowerCase().includes(s)) ||
+      r.users.some(u => u.name.toLowerCase().includes(s) || (u.email && u.email.toLowerCase().includes(s)) || u.username.toLowerCase().includes(s));
+
+    if (!matchesSearch) return false;
+
+    if (restaurantStatusFilter === "PENDING") {
+      return r.status === "PENDING";
+    }
+    if (restaurantStatusFilter === "UNDER_REVIEW") {
+      return r.status === "UNDER_REVIEW";
+    }
+    if (restaurantStatusFilter === "APPROVED") {
+      return r.status === "APPROVED" || r.status === "ACTIVE" || (!r.status && r.isActive);
+    }
+    if (restaurantStatusFilter === "REJECTED") {
+      return r.status === "REJECTED" || r.status === "SUSPENDED";
+    }
+    return true;
+  });
 
   return (
     <div style={{
@@ -724,8 +860,164 @@ export const SuperAdmin: React.FC = () => {
         {/* ======================================= */}
         {/* TAB 1: RESTAURANTS (TENANTS)            */}
         {/* ======================================= */}
-        {activeTab === "restaurants" && (
+        {(activeTab === "restaurants" || activeTab === "approvals") && (
           <div>
+            {/* Banner de alerta de solicitudes pendientes */}
+            {pendingRestaurantsCount > 0 && (
+              <div style={{
+                backgroundColor: "rgba(245, 158, 11, 0.12)",
+                border: "1px solid rgba(245, 158, 11, 0.35)",
+                borderRadius: "var(--radius-md)",
+                padding: "16px 20px",
+                marginBottom: "22px",
+                display: "flex",
+                alignItems: "center",
+                justifyContent: "space-between",
+                gap: "15px",
+                flexWrap: "wrap",
+                boxShadow: "0 4px 15px rgba(245, 158, 11, 0.08)"
+              }}>
+                <div style={{ display: "flex", alignItems: "center", gap: "14px" }}>
+                  <div style={{
+                    width: "42px",
+                    height: "42px",
+                    borderRadius: "50%",
+                    backgroundColor: "#f59e0b",
+                    color: "#fff",
+                    display: "flex",
+                    alignItems: "center",
+                    justifyContent: "center",
+                    flexShrink: 0
+                  }}>
+                    <Clock size={22} />
+                  </div>
+                  <div>
+                    <div style={{ fontWeight: 700, fontSize: "15px", color: "#b45309" }}>
+                      ¡Tienes {pendingRestaurantsCount} {pendingRestaurantsCount === 1 ? "solicitud de restaurante pendiente" : "solicitudes de restaurante pendientes"} de aprobación!
+                    </div>
+                    <div style={{ fontSize: "13px", color: "var(--text-secondary)", marginTop: "2px" }}>
+                      Revisa la información y aprueba los locales para activar la cuenta de sus dueños y enviar sus credenciales por correo.
+                    </div>
+                  </div>
+                </div>
+                <button
+                  onClick={() => setRestaurantStatusFilter("PENDING")}
+                  className="glow-btn"
+                  style={{
+                    padding: "9px 18px",
+                    fontSize: "13px",
+                    fontWeight: 600,
+                    backgroundColor: "#f59e0b",
+                    borderColor: "#d97706",
+                    color: "#fff"
+                  }}
+                >
+                  <Clock size={14} />
+                  Ver Pendientes ({pendingRestaurantsCount})
+                </button>
+              </div>
+            )}
+
+            {/* Sub-tabs de Filtro de Estado */}
+            <div style={{ display: "flex", gap: "10px", flexWrap: "wrap", marginBottom: "22px" }}>
+              <button
+                onClick={() => setRestaurantStatusFilter("ALL")}
+                style={{
+                  padding: "8px 16px",
+                  borderRadius: "20px",
+                  fontSize: "13px",
+                  fontWeight: 600,
+                  cursor: "pointer",
+                  border: "none",
+                  backgroundColor: restaurantStatusFilter === "ALL" ? "var(--accent-primary)" : "var(--bg-tertiary)",
+                  color: restaurantStatusFilter === "ALL" ? "#fff" : "var(--text-secondary)",
+                  transition: "all var(--transition-fast)"
+                }}
+              >
+                Todos los Locales ({restaurants.length})
+              </button>
+              <button
+                onClick={() => setRestaurantStatusFilter("PENDING")}
+                style={{
+                  padding: "8px 16px",
+                  borderRadius: "20px",
+                  fontSize: "13px",
+                  fontWeight: 600,
+                  cursor: "pointer",
+                  border: "none",
+                  backgroundColor: restaurantStatusFilter === "PENDING" ? "#f59e0b" : "rgba(245, 158, 11, 0.12)",
+                  color: restaurantStatusFilter === "PENDING" ? "#fff" : "#d97706",
+                  display: "flex",
+                  alignItems: "center",
+                  gap: "6px",
+                  transition: "all var(--transition-fast)"
+                }}
+              >
+                <Clock size={14} />
+                Solicitudes Pendientes ({pendingRestaurantsCount})
+              </button>
+              <button
+                onClick={() => setRestaurantStatusFilter("UNDER_REVIEW")}
+                style={{
+                  padding: "8px 16px",
+                  borderRadius: "20px",
+                  fontSize: "13px",
+                  fontWeight: 600,
+                  cursor: "pointer",
+                  border: "none",
+                  backgroundColor: restaurantStatusFilter === "UNDER_REVIEW" ? "#3b82f6" : "rgba(59, 130, 246, 0.12)",
+                  color: restaurantStatusFilter === "UNDER_REVIEW" ? "#fff" : "#2563eb",
+                  display: "flex",
+                  alignItems: "center",
+                  gap: "6px",
+                  transition: "all var(--transition-fast)"
+                }}
+              >
+                <Search size={14} />
+                En Revisión ({reviewRestaurantsCount})
+              </button>
+              <button
+                onClick={() => setRestaurantStatusFilter("APPROVED")}
+                style={{
+                  padding: "8px 16px",
+                  borderRadius: "20px",
+                  fontSize: "13px",
+                  fontWeight: 600,
+                  cursor: "pointer",
+                  border: "none",
+                  backgroundColor: restaurantStatusFilter === "APPROVED" ? "#10b981" : "rgba(16, 185, 129, 0.12)",
+                  color: restaurantStatusFilter === "APPROVED" ? "#fff" : "#059669",
+                  display: "flex",
+                  alignItems: "center",
+                  gap: "6px",
+                  transition: "all var(--transition-fast)"
+                }}
+              >
+                <CheckCircle size={14} />
+                Aprobados / Activos ({approvedRestaurantsCount})
+              </button>
+              <button
+                onClick={() => setRestaurantStatusFilter("REJECTED")}
+                style={{
+                  padding: "8px 16px",
+                  borderRadius: "20px",
+                  fontSize: "13px",
+                  fontWeight: 600,
+                  cursor: "pointer",
+                  border: "none",
+                  backgroundColor: restaurantStatusFilter === "REJECTED" ? "#ef4444" : "rgba(239, 68, 68, 0.12)",
+                  color: restaurantStatusFilter === "REJECTED" ? "#fff" : "#dc2626",
+                  display: "flex",
+                  alignItems: "center",
+                  gap: "6px",
+                  transition: "all var(--transition-fast)"
+                }}
+              >
+                <XCircle size={14} />
+                Rechazados ({rejectedRestaurantsCount})
+              </button>
+            </div>
+
             {/* Actions bar */}
             <div style={{
               display: "flex",
@@ -745,7 +1037,7 @@ export const SuperAdmin: React.FC = () => {
                 }} />
                 <input
                   type="text"
-                  placeholder="Buscar por nombre o slug..."
+                  placeholder="Buscar por nombre, slug, dueño o email..."
                   value={searchTerm}
                   onChange={(e) => setSearchTerm(e.target.value)}
                   className="input-field"
@@ -783,16 +1075,22 @@ export const SuperAdmin: React.FC = () => {
             ) : filteredRestaurants.length === 0 ? (
               <div className="glass-card" style={{ padding: "60px", textAlign: "center", color: "var(--text-secondary)" }}>
                 <Store size={48} style={{ marginBottom: "15px", color: "var(--text-muted)" }} />
-                <p style={{ fontSize: "16px", margin: 0 }}>No se encontraron restaurantes.</p>
+                <p style={{ fontSize: "16px", margin: 0 }}>
+                  {restaurantStatusFilter === "PENDING"
+                    ? "No hay solicitudes pendientes de aprobación."
+                    : restaurantStatusFilter === "UNDER_REVIEW"
+                    ? "No hay restaurantes en estado de revisión."
+                    : "No se encontraron restaurantes con los filtros aplicados."}
+                </p>
               </div>
             ) : (
               <div className="glass-card" style={{ overflowX: "auto" }}>
-                <table style={{ width: "100%", borderCollapse: "collapse", minWidth: "800px" }}>
+                <table style={{ width: "100%", borderCollapse: "collapse", minWidth: "900px" }}>
                   <thead>
                     <tr style={{ borderBottom: "1px solid var(--border-light)" }}>
                       <th style={{ padding: "16px 20px", textAlign: "left", fontSize: "13px", color: "var(--text-muted)" }}>RESTAURANTE</th>
                       <th style={{ padding: "16px 20px", textAlign: "left", fontSize: "13px", color: "var(--text-muted)" }}>SLUG / ENLACE</th>
-                      <th style={{ padding: "16px 20px", textAlign: "left", fontSize: "13px", color: "var(--text-muted)" }}>DUEÑO / STAFF</th>
+                      <th style={{ padding: "16px 20px", textAlign: "left", fontSize: "13px", color: "var(--text-muted)" }}>DUEÑO / CONTACTO</th>
                       <th style={{ padding: "16px 20px", textAlign: "left", fontSize: "13px", color: "var(--text-muted)" }}>FECHA REGISTRO</th>
                       <th style={{ padding: "16px 20px", textAlign: "center", fontSize: "13px", color: "var(--text-muted)" }}>ESTADO</th>
                       <th style={{ padding: "16px 20px", textAlign: "center", fontSize: "13px", color: "var(--text-muted)" }}>ACCIONES</th>
@@ -818,12 +1116,12 @@ export const SuperAdmin: React.FC = () => {
                                 <img
                                   src={restaurant.logo}
                                   alt={restaurant.name}
-                                  style={{ width: "40px", height: "40px", borderRadius: "8px", objectFit: "cover" }}
+                                  style={{ width: "42px", height: "42px", borderRadius: "8px", objectFit: "cover" }}
                                 />
                               ) : (
                                 <div style={{
-                                  width: "40px",
-                                  height: "40px",
+                                  width: "42px",
+                                  height: "42px",
                                   borderRadius: "8px",
                                   background: "var(--bg-tertiary)",
                                   display: "flex",
@@ -838,7 +1136,7 @@ export const SuperAdmin: React.FC = () => {
                               <div>
                                 <div style={{ fontWeight: 600, fontSize: "15px" }}>{restaurant.name}</div>
                                 <div style={{ fontSize: "11px", color: "var(--text-muted)", display: "flex", gap: "10px", marginTop: "2px" }}>
-                                  {restaurant.phone && <span>ID: {restaurant.id}</span>}
+                                  <span>ID: {restaurant.id}</span>
                                   {restaurant.address && <span>{restaurant.address}</span>}
                                 </div>
                               </div>
@@ -868,8 +1166,27 @@ export const SuperAdmin: React.FC = () => {
                           <td style={{ padding: "18px 20px" }}>
                             {ownerUser ? (
                               <div>
-                                <div style={{ fontSize: "13px", fontWeight: 500 }}>{ownerUser.name}</div>
-                                <div style={{ fontSize: "11px", color: "var(--text-muted)" }}>@{ownerUser.username}</div>
+                                <div style={{ fontSize: "13px", fontWeight: 600 }}>{ownerUser.name}</div>
+                                <div style={{ fontSize: "11px", color: "var(--text-muted)", display: "flex", alignItems: "center", gap: "6px", marginTop: "2px" }}>
+                                  <span>@{ownerUser.username}</span>
+                                  {ownerUser.isActive ? (
+                                    <span style={{ color: "var(--success)", fontWeight: 600, fontSize: "10px" }}>● Activo</span>
+                                  ) : (
+                                    <span style={{ color: "#f59e0b", fontWeight: 600, fontSize: "10px" }}>● Inactivo</span>
+                                  )}
+                                </div>
+                                {ownerUser.email && (
+                                  <div style={{ fontSize: "11px", color: "var(--text-secondary)", display: "flex", alignItems: "center", gap: "4px", marginTop: "3px" }}>
+                                    <Mail size={12} color="var(--text-muted)" />
+                                    <a href={`mailto:${ownerUser.email}`} style={{ color: "var(--text-secondary)", textDecoration: "none" }}>{ownerUser.email}</a>
+                                  </div>
+                                )}
+                                {(ownerUser.phone || restaurant.phone) && (
+                                  <div style={{ fontSize: "11px", color: "var(--text-secondary)", display: "flex", alignItems: "center", gap: "4px", marginTop: "2px" }}>
+                                    <Phone size={12} color="var(--text-muted)" />
+                                    <span>{ownerUser.phone || restaurant.phone}</span>
+                                  </div>
+                                )}
                               </div>
                             ) : (
                               <div style={{ fontSize: "12px", color: "var(--accent-primary)" }}>Sin dueño asignado</div>
@@ -887,57 +1204,204 @@ export const SuperAdmin: React.FC = () => {
 
                           {/* Status */}
                           <td style={{ padding: "18px 20px", textAlign: "center" }}>
-                            {restaurant.isActive ? (
+                            {restaurant.status === "PENDING" ? (
                               <span style={{
                                 display: "inline-flex",
                                 alignItems: "center",
-                                gap: "4px",
-                                padding: "4px 8px",
-                                borderRadius: "10px",
-                                backgroundColor: "rgba(46, 213, 115, 0.1)",
+                                gap: "5px",
+                                padding: "5px 10px",
+                                borderRadius: "12px",
+                                backgroundColor: "rgba(245, 158, 11, 0.15)",
+                                color: "#d97706",
+                                fontSize: "11px",
+                                fontWeight: 700
+                              }}>
+                                <Clock size={12} />
+                                ⏳ Pendiente
+                              </span>
+                            ) : restaurant.status === "UNDER_REVIEW" ? (
+                              <span style={{
+                                display: "inline-flex",
+                                alignItems: "center",
+                                gap: "5px",
+                                padding: "5px 10px",
+                                borderRadius: "12px",
+                                backgroundColor: "rgba(59, 130, 246, 0.15)",
+                                color: "#2563eb",
+                                fontSize: "11px",
+                                fontWeight: 700
+                              }}>
+                                <Search size={12} />
+                                🔍 En Revisión
+                              </span>
+                            ) : restaurant.status === "REJECTED" ? (
+                              <span style={{
+                                display: "inline-flex",
+                                alignItems: "center",
+                                gap: "5px",
+                                padding: "5px 10px",
+                                borderRadius: "12px",
+                                backgroundColor: "rgba(239, 68, 68, 0.15)",
+                                color: "#dc2626",
+                                fontSize: "11px",
+                                fontWeight: 700
+                              }}>
+                                <XCircle size={12} />
+                                ❌ Rechazado
+                              </span>
+                            ) : (restaurant.status === "APPROVED" || restaurant.status === "ACTIVE" || (!restaurant.status && restaurant.isActive)) ? (
+                              <span style={{
+                                display: "inline-flex",
+                                alignItems: "center",
+                                gap: "5px",
+                                padding: "5px 10px",
+                                borderRadius: "12px",
+                                backgroundColor: "rgba(46, 213, 115, 0.15)",
                                 color: "var(--success)",
                                 fontSize: "11px",
-                                fontWeight: 600
+                                fontWeight: 700
                               }}>
-                                <CheckCircle size={10} />
-                                Activo
+                                <CheckCircle size={12} />
+                                ✅ Aprobado
                               </span>
                             ) : (
                               <span style={{
                                 display: "inline-flex",
                                 alignItems: "center",
-                                gap: "4px",
-                                padding: "4px 8px",
-                                borderRadius: "10px",
-                                backgroundColor: "rgba(255, 71, 87, 0.1)",
+                                gap: "5px",
+                                padding: "5px 10px",
+                                borderRadius: "12px",
+                                backgroundColor: "rgba(255, 71, 87, 0.15)",
                                 color: "var(--accent-primary)",
                                 fontSize: "11px",
-                                fontWeight: 600
+                                fontWeight: 700
                               }}>
-                                <XCircle size={10} />
+                                <XCircle size={12} />
                                 Inactivo
                               </span>
                             )}
                           </td>
 
-                          {/* Toggle Active status */}
+                          {/* Action Buttons */}
                           <td style={{ padding: "18px 20px", textAlign: "center" }}>
-                            <button
-                              onClick={() => handleToggleActive(restaurant)}
-                              style={{
-                                padding: "6px 12px",
-                                borderRadius: "var(--radius-sm)",
-                                fontSize: "12px",
-                                fontWeight: 600,
-                                cursor: "pointer",
-                                transition: "all var(--transition-fast)",
-                                backgroundColor: restaurant.isActive ? "rgba(255, 71, 87, 0.1)" : "rgba(46, 213, 115, 0.1)",
-                                border: restaurant.isActive ? "1px solid rgba(255, 71, 87, 0.2)" : "1px solid rgba(46, 213, 115, 0.2)",
-                                color: restaurant.isActive ? "var(--accent-primary)" : "var(--success)",
-                              }}
-                            >
-                              {restaurant.isActive ? "Desactivar" : "Activar"}
-                            </button>
+                            <div style={{ display: "flex", alignItems: "center", justifyContent: "center", gap: "8px", flexWrap: "wrap" }}>
+                              {(restaurant.status === "PENDING" || restaurant.status === "UNDER_REVIEW") ? (
+                                <>
+                                  <button
+                                    onClick={() => setSelectedApproveRestaurant(restaurant)}
+                                    style={{
+                                      padding: "7px 14px",
+                                      borderRadius: "var(--radius-sm)",
+                                      fontSize: "12px",
+                                      fontWeight: 700,
+                                      cursor: "pointer",
+                                      display: "inline-flex",
+                                      alignItems: "center",
+                                      gap: "5px",
+                                      backgroundColor: "rgba(16, 185, 129, 0.15)",
+                                      border: "1px solid rgba(16, 185, 129, 0.4)",
+                                      color: "#059669",
+                                      transition: "all var(--transition-fast)"
+                                    }}
+                                    title="Aprobar local y activar cuenta del dueño"
+                                  >
+                                    <Check size={13} />
+                                    Aprobar Local
+                                  </button>
+
+                                  {restaurant.status === "PENDING" && (
+                                    <button
+                                      onClick={() => handleReviewRestaurant(restaurant)}
+                                      style={{
+                                        padding: "7px 12px",
+                                        borderRadius: "var(--radius-sm)",
+                                        fontSize: "12px",
+                                        fontWeight: 600,
+                                        cursor: "pointer",
+                                        display: "inline-flex",
+                                        alignItems: "center",
+                                        gap: "4px",
+                                        backgroundColor: "rgba(59, 130, 246, 0.1)",
+                                        border: "1px solid rgba(59, 130, 246, 0.3)",
+                                        color: "#2563eb",
+                                        transition: "all var(--transition-fast)"
+                                      }}
+                                      title="Poner en estado de revisión"
+                                    >
+                                      <Clock size={13} />
+                                      En Revisión
+                                    </button>
+                                  )}
+
+                                  <button
+                                    onClick={() => {
+                                      setSelectedRejectRestaurant(restaurant);
+                                      setRejectReason("");
+                                    }}
+                                    style={{
+                                      padding: "7px 12px",
+                                      borderRadius: "var(--radius-sm)",
+                                      fontSize: "12px",
+                                      fontWeight: 600,
+                                      cursor: "pointer",
+                                      display: "inline-flex",
+                                      alignItems: "center",
+                                      gap: "4px",
+                                      backgroundColor: "rgba(239, 68, 68, 0.1)",
+                                      border: "1px solid rgba(239, 68, 68, 0.3)",
+                                      color: "#dc2626",
+                                      transition: "all var(--transition-fast)"
+                                    }}
+                                    title="Rechazar solicitud de afiliación"
+                                  >
+                                    <X size={13} />
+                                    Rechazar
+                                  </button>
+                                </>
+                              ) : (
+                                <>
+                                  <button
+                                    onClick={() => handleToggleActive(restaurant)}
+                                    style={{
+                                      padding: "6px 12px",
+                                      borderRadius: "var(--radius-sm)",
+                                      fontSize: "12px",
+                                      fontWeight: 600,
+                                      cursor: "pointer",
+                                      transition: "all var(--transition-fast)",
+                                      backgroundColor: restaurant.isActive ? "rgba(255, 71, 87, 0.1)" : "rgba(46, 213, 115, 0.1)",
+                                      border: restaurant.isActive ? "1px solid rgba(255, 71, 87, 0.2)" : "1px solid rgba(46, 213, 115, 0.2)",
+                                      color: restaurant.isActive ? "var(--accent-primary)" : "var(--success)",
+                                    }}
+                                  >
+                                    {restaurant.isActive ? "Desactivar" : "Activar"}
+                                  </button>
+
+                                  {restaurant.status !== "REJECTED" && (
+                                    <button
+                                      onClick={() => {
+                                        setSelectedRejectRestaurant(restaurant);
+                                        setRejectReason("");
+                                      }}
+                                      style={{
+                                        padding: "6px 10px",
+                                        borderRadius: "var(--radius-sm)",
+                                        fontSize: "12px",
+                                        fontWeight: 600,
+                                        cursor: "pointer",
+                                        backgroundColor: "rgba(239, 68, 68, 0.08)",
+                                        border: "1px solid rgba(239, 68, 68, 0.2)",
+                                        color: "#dc2626",
+                                        transition: "all var(--transition-fast)"
+                                      }}
+                                      title="Suspender este restaurante"
+                                    >
+                                      Suspender
+                                    </button>
+                                  )}
+                                </>
+                              )}
+                            </div>
                           </td>
                         </tr>
                       );
@@ -1663,19 +2127,46 @@ export const SuperAdmin: React.FC = () => {
                           )}
                         </td>
                         <td style={{ padding: "18px 20px", textAlign: "center" }}>
-                          <button
-                            type="button"
-                            onClick={() => handleToggleCustomerPlus(customer.id)}
-                            className="secondary-btn"
-                            style={{
-                              padding: "6px 12px",
-                              fontSize: "12px",
-                              color: customer.isPlus ? "var(--accent-primary)" : "var(--success)",
-                              borderColor: customer.isPlus ? "rgba(255, 71, 87, 0.2)" : "rgba(46, 213, 115, 0.2)"
-                            }}
-                          >
-                            {customer.isPlus ? "Quitar Plus" : "Hacer Plus"}
-                          </button>
+                          <div style={{ display: "inline-flex", alignItems: "center", gap: "8px" }}>
+                            <button
+                              type="button"
+                              onClick={() => handleToggleCustomerPlus(customer.id)}
+                              className="secondary-btn"
+                              style={{
+                                padding: "6px 12px",
+                                fontSize: "12px",
+                                color: customer.isPlus ? "var(--accent-primary)" : "var(--success)",
+                                borderColor: customer.isPlus ? "rgba(255, 71, 87, 0.2)" : "rgba(46, 213, 115, 0.2)"
+                              }}
+                            >
+                              {customer.isPlus ? "Quitar Plus" : "Hacer Plus"}
+                            </button>
+
+                            <button
+                              type="button"
+                              onClick={() => handleDeleteCustomer(customer.id, customer.name, customer.username)}
+                              disabled={deletingCustomerId === customer.id}
+                              title="Eliminar cliente permanentemente"
+                              style={{
+                                display: "inline-flex",
+                                alignItems: "center",
+                                justifyContent: "center",
+                                padding: "6px 10px",
+                                borderRadius: "8px",
+                                border: "1px solid rgba(239, 68, 68, 0.3)",
+                                backgroundColor: "rgba(239, 68, 68, 0.1)",
+                                color: "#ef4444",
+                                cursor: deletingCustomerId === customer.id ? "not-allowed" : "pointer",
+                                transition: "all 0.2s ease"
+                              }}
+                            >
+                              {deletingCustomerId === customer.id ? (
+                                <Loader2 size={14} className="animate-spin" />
+                              ) : (
+                                <Trash2 size={14} />
+                              )}
+                            </button>
+                          </div>
                         </td>
                       </tr>
                     ))
@@ -2403,6 +2894,228 @@ export const SuperAdmin: React.FC = () => {
                 style={{ padding: "10px 22px", backgroundColor: "var(--success)", borderColor: "var(--success)" }}
               >
                 Aprobar y Acreditar
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* Modal Aprobar Restaurante */}
+      {selectedApproveRestaurant && (
+        <div className="global-modal-overlay">
+          <div className="global-modal-card animate-scale-up" style={{ maxWidth: "520px" }}>
+            <button
+              onClick={() => setSelectedApproveRestaurant(null)}
+              style={{ position: "absolute", top: "15px", right: "15px", border: "none", background: "none", fontSize: "1.5rem", cursor: "pointer", color: "var(--text-secondary)" }}
+            >
+              &times;
+            </button>
+            <div style={{ display: "flex", alignItems: "center", gap: "12px", marginBottom: "20px" }}>
+              <div style={{
+                width: "44px",
+                height: "44px",
+                borderRadius: "50%",
+                backgroundColor: "rgba(16, 185, 129, 0.15)",
+                color: "var(--success)",
+                display: "flex",
+                alignItems: "center",
+                justifyContent: "center"
+              }}>
+                <CheckCircle size={26} />
+              </div>
+              <div>
+                <h3 style={{ fontSize: "18px", fontWeight: "bold", margin: 0 }}>Aprobar Restaurante</h3>
+                <p style={{ fontSize: "12px", color: "var(--text-muted)", margin: "2px 0 0 0" }}>
+                  Habilitar operaciones y activar credenciales de acceso
+                </p>
+              </div>
+            </div>
+
+            <div style={{
+              backgroundColor: "var(--bg-tertiary)",
+              borderRadius: "var(--radius-md)",
+              padding: "16px",
+              marginBottom: "20px",
+              border: "1px solid var(--border-light)",
+              fontSize: "13px",
+              display: "flex",
+              flexDirection: "column",
+              gap: "8px"
+            }}>
+              <div><strong>Restaurante:</strong> {selectedApproveRestaurant.name}</div>
+              <div><strong>Enlace Slug:</strong> /r/{selectedApproveRestaurant.slug}</div>
+              {selectedApproveRestaurant.address && <div><strong>Dirección:</strong> {selectedApproveRestaurant.address}</div>}
+              {selectedApproveRestaurant.phone && <div><strong>Teléfono:</strong> {selectedApproveRestaurant.phone}</div>}
+              
+              {(() => {
+                const owner = selectedApproveRestaurant.users.find(u => u.role === "RESTAURANT_OWNER");
+                return owner ? (
+                  <div style={{ marginTop: "6px", paddingTop: "8px", borderTop: "1px dashed var(--border-light)" }}>
+                    <div><strong>Dueño:</strong> {owner.name} (@{owner.username})</div>
+                    {owner.email && <div><strong>Correo de Notificación:</strong> {owner.email}</div>}
+                    {owner.phone && <div><strong>Celular Dueño:</strong> {owner.phone}</div>}
+                  </div>
+                ) : null;
+              })()}
+            </div>
+
+            <div style={{
+              backgroundColor: "rgba(16, 185, 129, 0.08)",
+              border: "1px solid rgba(16, 185, 129, 0.2)",
+              borderRadius: "var(--radius-sm)",
+              padding: "12px 14px",
+              fontSize: "12px",
+              color: "#059669",
+              marginBottom: "25px",
+              display: "flex",
+              alignItems: "flex-start",
+              gap: "10px"
+            }}>
+              <Check size={18} style={{ flexShrink: 0, marginTop: "2px" }} />
+              <div>
+                Al confirmar la aprobación, la cuenta del restaurante y la de su dueño pasarán a estado <strong>ACTIVO</strong>. Se enviará un correo automático de bienvenida al dueño confirmando que su local ya está habilitado en la plataforma.
+              </div>
+            </div>
+
+            <div style={{ display: "flex", gap: "10px", justifyContent: "flex-end" }}>
+              <button
+                type="button"
+                disabled={approvingRestaurant}
+                onClick={() => setSelectedApproveRestaurant(null)}
+                className="secondary-btn"
+                style={{ padding: "10px 18px" }}
+              >
+                Cancelar
+              </button>
+              <button
+                type="button"
+                disabled={approvingRestaurant}
+                onClick={() => handleApproveRestaurant(selectedApproveRestaurant)}
+                className="glow-btn"
+                style={{
+                  padding: "10px 22px",
+                  backgroundColor: "var(--success)",
+                  borderColor: "var(--success)",
+                  display: "flex",
+                  alignItems: "center",
+                  gap: "8px"
+                }}
+              >
+                {approvingRestaurant ? (
+                  <>
+                    <Loader2 className="spinner" size={16} style={{ animation: "spin 1s linear infinite" }} />
+                    Aprobando...
+                  </>
+                ) : (
+                  <>
+                    <Check size={16} />
+                    Sí, Aprobar y Notificar
+                  </>
+                )}
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* Modal Rechazar Restaurante */}
+      {selectedRejectRestaurant && (
+        <div className="global-modal-overlay">
+          <div className="global-modal-card animate-scale-up" style={{ maxWidth: "520px" }}>
+            <button
+              onClick={() => {
+                setSelectedRejectRestaurant(null);
+                setRejectReason("");
+              }}
+              style={{ position: "absolute", top: "15px", right: "15px", border: "none", background: "none", fontSize: "1.5rem", cursor: "pointer", color: "var(--text-secondary)" }}
+            >
+              &times;
+            </button>
+            <div style={{ display: "flex", alignItems: "center", gap: "12px", marginBottom: "20px" }}>
+              <div style={{
+                width: "44px",
+                height: "44px",
+                borderRadius: "50%",
+                backgroundColor: "rgba(239, 68, 68, 0.15)",
+                color: "#dc2626",
+                display: "flex",
+                alignItems: "center",
+                justifyContent: "center"
+              }}>
+                <AlertTriangle size={26} />
+              </div>
+              <div>
+                <h3 style={{ fontSize: "18px", fontWeight: "bold", margin: 0 }}>Rechazar Solicitud</h3>
+                <p style={{ fontSize: "12px", color: "var(--text-muted)", margin: "2px 0 0 0" }}>
+                  {selectedRejectRestaurant.name}
+                </p>
+              </div>
+            </div>
+
+            <div style={{ marginBottom: "20px" }}>
+              <label style={{ display: "block", fontSize: "13px", fontWeight: 600, marginBottom: "8px" }}>
+                Motivo del Rechazo / Observaciones (se enviará por correo al dueño):
+              </label>
+              <textarea
+                rows={4}
+                value={rejectReason}
+                onChange={(e) => setRejectReason(e.target.value)}
+                placeholder="Ej: La documentación proporcionada no es legible o faltan datos requeridos..."
+                className="input-field"
+                style={{ width: "100%", resize: "vertical" }}
+              />
+            </div>
+
+            <div style={{
+              backgroundColor: "rgba(239, 68, 68, 0.08)",
+              border: "1px solid rgba(239, 68, 68, 0.2)",
+              borderRadius: "var(--radius-sm)",
+              padding: "12px 14px",
+              fontSize: "12px",
+              color: "#dc2626",
+              marginBottom: "25px"
+            }}>
+              Al rechazar la solicitud, el local no aparecerá en el catálogo público y el dueño recibirá una notificación con las observaciones para que pueda corregirlas.
+            </div>
+
+            <div style={{ display: "flex", gap: "10px", justifyContent: "flex-end" }}>
+              <button
+                type="button"
+                disabled={rejectingRestaurant}
+                onClick={() => {
+                  setSelectedRejectRestaurant(null);
+                  setRejectReason("");
+                }}
+                className="secondary-btn"
+                style={{ padding: "10px 18px" }}
+              >
+                Cancelar
+              </button>
+              <button
+                type="button"
+                disabled={rejectingRestaurant}
+                onClick={() => handleRejectRestaurant(selectedRejectRestaurant)}
+                className="glow-btn"
+                style={{
+                  padding: "10px 22px",
+                  backgroundColor: "#dc2626",
+                  borderColor: "#dc2626",
+                  display: "flex",
+                  alignItems: "center",
+                  gap: "8px"
+                }}
+              >
+                {rejectingRestaurant ? (
+                  <>
+                    <Loader2 className="spinner" size={16} style={{ animation: "spin 1s linear infinite" }} />
+                    Rechazando...
+                  </>
+                ) : (
+                  <>
+                    <X size={16} />
+                    Confirmar Rechazo
+                  </>
+                )}
               </button>
             </div>
           </div>

@@ -1,4 +1,5 @@
 import React, { useEffect, useState } from "react";
+import { createPortal } from "react-dom";
 import { useSearchParams } from "react-router-dom";
 import { apiRequest } from "../utils/api";
 import { useAuth } from "../context/AuthContext";
@@ -7,6 +8,7 @@ import {
   CreditCard,
   Building2,
   Plus,
+  X,
   Trash2,
   Edit,
   Loader2,
@@ -74,6 +76,8 @@ export const Settings: React.FC = () => {
   const [reference, setReference] = useState("");
   const [openingHours, setOpeningHours] = useState("");
   const [faqs, setFaqs] = useState<{ question: string; answer: string }[]>([]);
+  const [resolvingMaps, setResolvingMaps] = useState(false);
+  const [mapsDetectMsg, setMapsDetectMsg] = useState<{ type: "success" | "error"; text: string } | null>(null);
 
   // Payment configuration states
   const [payphoneToken, setPayphoneToken] = useState("");
@@ -799,6 +803,87 @@ export const Settings: React.FC = () => {
     reader.readAsDataURL(file);
   };
 
+  const handleResolveMapsLink = async (rawUrl: string) => {
+    if (!rawUrl || !rawUrl.trim()) return;
+    const raw = rawUrl.trim();
+    setMapsDetectMsg(null);
+
+    // 1. Direct Regex checks if it's already an iframe or full URL with coordinates
+    const iframeMatch = raw.match(/src="([^"]+)"/i);
+    const candidateUrl = iframeMatch ? iframeMatch[1] : raw;
+
+    // Check !3d(lat)!4d(lng)
+    const placeCoordsMatch = candidateUrl.match(/!3d(-?\d+\.\d+)!4d(-?\d+\.\d+)/);
+    if (placeCoordsMatch) {
+      const lat = parseFloat(placeCoordsMatch[1]).toFixed(6);
+      const lng = parseFloat(placeCoordsMatch[2]).toFixed(6);
+      setMapLatitude(lat);
+      setMapLongitude(lng);
+      setMapIframe(`<iframe src="https://maps.google.com/maps?q=${lat},${lng}&z=16&output=embed" width="100%" height="300" style="border:0;" allowfullscreen="" loading="lazy"></iframe>`);
+      setMapsDetectMsg({ type: "success", text: `📍 ¡Ubicación detectada! Coordenadas: (${lat}, ${lng})` });
+      return;
+    }
+
+    // Check @lat,lng if not a shortened link
+    if (!candidateUrl.includes("maps.app.goo.gl") && !candidateUrl.includes("goo.gl/maps")) {
+      const atMatch = candidateUrl.match(/@(-?\d+\.\d+),(-?\d+\.\d+)/);
+      if (atMatch) {
+        const lat = parseFloat(atMatch[1]).toFixed(6);
+        const lng = parseFloat(atMatch[2]).toFixed(6);
+        setMapLatitude(lat);
+        setMapLongitude(lng);
+        setMapIframe(`<iframe src="https://maps.google.com/maps?q=${lat},${lng}&z=16&output=embed" width="100%" height="300" style="border:0;" allowfullscreen="" loading="lazy"></iframe>`);
+        setMapsDetectMsg({ type: "success", text: `📍 ¡Ubicación detectada! Coordenadas: (${lat}, ${lng})` });
+        return;
+      }
+
+      const qMatch = candidateUrl.match(/[?&](?:q|ll)=(-?\d+\.\d+),(-?\d+\.\d+)/);
+      if (qMatch) {
+        const lat = parseFloat(qMatch[1]).toFixed(6);
+        const lng = parseFloat(qMatch[2]).toFixed(6);
+        setMapLatitude(lat);
+        setMapLongitude(lng);
+        setMapIframe(`<iframe src="https://maps.google.com/maps?q=${lat},${lng}&z=16&output=embed" width="100%" height="300" style="border:0;" allowfullscreen="" loading="lazy"></iframe>`);
+        setMapsDetectMsg({ type: "success", text: `📍 ¡Ubicación detectada! Coordenadas: (${lat}, ${lng})` });
+        return;
+      }
+    }
+
+    // 2. Call backend resolver for shortened links (maps.app.goo.gl, etc.)
+    try {
+      setResolvingMaps(true);
+      const res = await apiRequest("/restaurants/resolve-maps-url", {
+        method: "POST",
+        body: JSON.stringify({ url: candidateUrl }),
+      });
+
+      if (res.success && res.lat && res.lng) {
+        const lat = Number(res.lat).toFixed(6);
+        const lng = Number(res.lng).toFixed(6);
+        setMapLatitude(lat);
+        setMapLongitude(lng);
+        setMapIframe(`<iframe src="https://maps.google.com/maps?q=${lat},${lng}&z=16&output=embed" width="100%" height="300" style="border:0;" allowfullscreen="" loading="lazy"></iframe>`);
+        setMapsDetectMsg({
+          type: "success",
+          text: `📍 ¡Ubicación detectada con éxito! ${res.placeName ? `(${res.placeName}) ` : ""}[${lat}, ${lng}]`,
+        });
+      } else {
+        setMapsDetectMsg({
+          type: "error",
+          text: res.message || "No se pudieron extraer las coordenadas del enlace.",
+        });
+      }
+    } catch (err: any) {
+      console.error("Error resolving maps URL:", err);
+      setMapsDetectMsg({
+        type: "error",
+        text: err.message || "Error al conectar con el servidor para resolver el enlace.",
+      });
+    } finally {
+      setResolvingMaps(false);
+    }
+  };
+
   const handleSaveSettings = async (e?: React.FormEvent) => {
     if (e && e.preventDefault) e.preventDefault();
     if (!user?.restaurantId) {
@@ -1501,48 +1586,87 @@ export const Settings: React.FC = () => {
                 <Sparkles size={14} color="#ffd700" />
                 <span>Auto-detectar desde Enlace de Google Maps o Iframe</span>
               </label>
-              <input
-                type="text"
-                placeholder="Pega aquí cualquier enlace de Google Maps (ej. https://maps.app.goo.gl/... o https://maps.google.com/?q=-3.9965,-79.2030 o iframe)"
-                value={mapIframe.startsWith("<iframe") ? "Iframe configurado ✓" : mapIframe}
-                onChange={(e) => {
-                  const raw = e.target.value;
-                  setMapIframe(raw);
-                  if (!raw) return;
 
-                  // 1. Check for iframe src
-                  const iframeMatch = raw.match(/src="([^"]+)"/i);
-                  const urlToParse = iframeMatch ? iframeMatch[1] : raw;
+              <div style={{ display: "flex", gap: "8px", alignItems: "center" }}>
+                <input
+                  type="text"
+                  placeholder="Pega aquí cualquier enlace de Google Maps (ej. https://maps.app.goo.gl/... o https://maps.google.com/?q=-3.9965,-79.2030 o iframe)"
+                  value={mapIframe.startsWith("<iframe") ? "Iframe configurado ✓" : mapIframe}
+                  onChange={(e) => {
+                    const val = e.target.value;
+                    setMapIframe(val);
+                    if (val.trim()) {
+                      handleResolveMapsLink(val);
+                    }
+                  }}
+                  onPaste={(e) => {
+                    const pasted = e.clipboardData.getData("text");
+                    if (pasted && pasted.trim()) {
+                      setTimeout(() => handleResolveMapsLink(pasted), 50);
+                    }
+                  }}
+                  className="input-field"
+                  style={{ flex: 1 }}
+                />
 
-                  // 2. Check for @lat,lng coordinates (e.g. /@-3.9965,-79.2030,17z)
-                  const atMatch = urlToParse.match(/@(-?\d+\.\d+),(-?\d+\.\d+)/);
-                  if (atMatch) {
-                    setMapLatitude(atMatch[1]);
-                    setMapLongitude(atMatch[2]);
-                    return;
-                  }
+                <button
+                  type="button"
+                  onClick={() => handleResolveMapsLink(mapIframe)}
+                  disabled={resolvingMaps || !mapIframe.trim()}
+                  style={{
+                    display: "flex",
+                    alignItems: "center",
+                    gap: "6px",
+                    backgroundColor: "var(--accent-primary)",
+                    color: "#ffffff",
+                    border: "none",
+                    borderRadius: "var(--radius-sm)",
+                    padding: "10px 18px",
+                    fontSize: "13px",
+                    fontWeight: "700",
+                    cursor: resolvingMaps || !mapIframe.trim() ? "not-allowed" : "pointer",
+                    opacity: resolvingMaps || !mapIframe.trim() ? 0.6 : 1,
+                    whiteSpace: "nowrap",
+                    transition: "all 0.2s ease",
+                  }}
+                >
+                  {resolvingMaps ? (
+                    <>
+                      <Loader2 size={15} className="spinner" style={{ animation: "spin 1s linear infinite" }} />
+                      Detectando...
+                    </>
+                  ) : (
+                    <>
+                      <Navigation size={14} />
+                      Detectar
+                    </>
+                  )}
+                </button>
+              </div>
 
-                  // 3. Check for !2d (lng) and !3d (lat) in embed URLs
-                  const embedLat = urlToParse.match(/!3d(-?\d+\.\d+)/);
-                  const embedLng = urlToParse.match(/!2d(-?\d+\.\d+)/);
-                  if (embedLat && embedLng) {
-                    setMapLatitude(embedLat[1]);
-                    setMapLongitude(embedLng[1]);
-                    return;
-                  }
+              {mapsDetectMsg && (
+                <div
+                  style={{
+                    marginTop: "8px",
+                    padding: "8px 12px",
+                    borderRadius: "8px",
+                    fontSize: "12px",
+                    fontWeight: "600",
+                    backgroundColor: mapsDetectMsg.type === "success" ? "#ecfdf5" : "#fef2f2",
+                    color: mapsDetectMsg.type === "success" ? "#065f46" : "#991b1b",
+                    border: `1px solid ${mapsDetectMsg.type === "success" ? "#a7f3d0" : "#fecaca"}`,
+                    display: "flex",
+                    alignItems: "center",
+                    gap: "6px",
+                  }}
+                >
+                  {mapsDetectMsg.type === "success" ? <CheckCircle size={15} /> : <HelpCircle size={15} />}
+                  <span>{mapsDetectMsg.text}</span>
+                </div>
+              )}
 
-                  // 4. Check for q=lat,lng or ll=lat,lng
-                  const qMatch = urlToParse.match(/[?&](?:q|ll)=(-?\d+\.\d+),(-?\d+\.\d+)/);
-                  if (qMatch) {
-                    setMapLatitude(qMatch[1]);
-                    setMapLongitude(qMatch[2]);
-                    return;
-                  }
-                }}
-                className="input-field"
-              />
-              <small style={{ fontSize: "11px", color: "var(--text-muted)", marginTop: "3px", display: "block" }}>
-                💡 Pega cualquier link de Google Maps y las coordenadas se extraerán automáticamente en 1 segundo.
+              <small style={{ fontSize: "11px", color: "var(--text-muted)", marginTop: "4px", display: "block" }}>
+                💡 Pega cualquier link de Google Maps (incluyendo enlaces cortos como maps.app.goo.gl) y las coordenadas se extraerán automáticamente.
               </small>
             </div>
 
@@ -2361,13 +2485,28 @@ export const Settings: React.FC = () => {
       )}
 
       {/* BANK ACCOUNT MODAL */}
-      {showAccountModal && (
-        <div className="global-modal-overlay">
+      {showAccountModal && createPortal(
+        <div 
+          className="global-modal-overlay"
+          onClick={(e) => {
+            if (e.target === e.currentTarget) setShowAccountModal(false);
+          }}
+        >
           <div className="global-modal-card" style={{ maxWidth: "500px" }}>
-            <h2 style={{ fontSize: "20px", marginBottom: "20px", display: "flex", alignItems: "center", gap: "8px" }}>
-              <Building2 size={20} style={{ color: "var(--accent-primary)" }} />
-              {editingAccountId ? "Editar Cuenta Bancaria" : "Agregar Cuenta Bancaria"}
-            </h2>
+            <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: "20px" }}>
+              <h2 style={{ fontSize: "20px", margin: 0, display: "flex", alignItems: "center", gap: "8px" }}>
+                <Building2 size={20} style={{ color: "var(--accent-primary)" }} />
+                {editingAccountId ? "Editar Cuenta Bancaria" : "Agregar Cuenta Bancaria"}
+              </h2>
+              <button
+                type="button"
+                onClick={() => setShowAccountModal(false)}
+                className="global-modal-close-btn"
+                title="Cerrar"
+              >
+                <X size={20} />
+              </button>
+            </div>
 
             <form onSubmit={handleSaveAccount} style={{ display: "flex", flexDirection: "column", gap: "15px" }}>
               <div className="input-group">
@@ -2512,17 +2651,33 @@ export const Settings: React.FC = () => {
               </div>
             </form>
           </div>
-        </div>
+        </div>,
+        document.body
       )}
 
       {/* DINING AREA MODAL */}
-      {showAreaModal && (
-        <div className="global-modal-overlay">
+      {showAreaModal && createPortal(
+        <div 
+          className="global-modal-overlay"
+          onClick={(e) => {
+            if (e.target === e.currentTarget) setShowAreaModal(false);
+          }}
+        >
           <div className="global-modal-card" style={{ maxWidth: "400px" }}>
-            <h2 style={{ fontSize: "20px", marginBottom: "20px", display: "flex", alignItems: "center", gap: "8px", fontWeight: 700 }}>
-              <Store size={20} style={{ color: "var(--accent-primary)" }} />
-              {editingAreaId ? "Editar Salón" : "Crear Nuevo Salón"}
-            </h2>
+            <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: "20px" }}>
+              <h2 style={{ fontSize: "20px", margin: 0, display: "flex", alignItems: "center", gap: "8px", fontWeight: 700 }}>
+                <Store size={20} style={{ color: "var(--accent-primary)" }} />
+                {editingAreaId ? "Editar Salón" : "Crear Nuevo Salón"}
+              </h2>
+              <button
+                type="button"
+                onClick={() => setShowAreaModal(false)}
+                className="global-modal-close-btn"
+                title="Cerrar"
+              >
+                <X size={20} />
+              </button>
+            </div>
 
             <form onSubmit={handleSaveArea} style={{ display: "flex", flexDirection: "column", gap: "15px" }}>
               <div className="input-group">
@@ -2556,7 +2711,8 @@ export const Settings: React.FC = () => {
               </div>
             </form>
           </div>
-        </div>
+        </div>,
+        document.body
       )}
 
       {/* TAB 4: PERSONAL (STAFF) SETTINGS */}
@@ -3534,13 +3690,28 @@ export const Settings: React.FC = () => {
       )}
 
       {/* STAFF MODAL */}
-      {showStaffModal && (
-        <div className="global-modal-overlay">
+      {showStaffModal && createPortal(
+        <div 
+          className="global-modal-overlay"
+          onClick={(e) => {
+            if (e.target === e.currentTarget) setShowStaffModal(false);
+          }}
+        >
           <div className="global-modal-card" style={{ maxWidth: "450px" }}>
-            <h2 style={{ fontSize: "20px", marginBottom: "20px", display: "flex", alignItems: "center", gap: "8px", fontWeight: 700 }}>
-              <Users size={20} style={{ color: "var(--accent-primary)" }} />
-              {editingStaffId ? "Editar Personal" : "Agregar Nuevo Personal"}
-            </h2>
+            <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: "20px" }}>
+              <h2 style={{ fontSize: "20px", margin: 0, display: "flex", alignItems: "center", gap: "8px", fontWeight: 700 }}>
+                <Users size={20} style={{ color: "var(--accent-primary)" }} />
+                {editingStaffId ? "Editar Personal" : "Agregar Nuevo Personal"}
+              </h2>
+              <button
+                type="button"
+                onClick={() => setShowStaffModal(false)}
+                className="global-modal-close-btn"
+                title="Cerrar"
+              >
+                <X size={20} />
+              </button>
+            </div>
 
             <form onSubmit={handleSaveStaff} style={{ display: "flex", flexDirection: "column", gap: "15px" }}>
               <div className="input-group">
@@ -3662,17 +3833,33 @@ export const Settings: React.FC = () => {
               </div>
             </form>
           </div>
-        </div>
+        </div>,
+        document.body
       )}
 
       {/* CASH REGISTER MODAL */}
-      {showRegisterModal && (
-        <div className="global-modal-overlay">
+      {showRegisterModal && createPortal(
+        <div 
+          className="global-modal-overlay"
+          onClick={(e) => {
+            if (e.target === e.currentTarget) setShowRegisterModal(false);
+          }}
+        >
           <div className="global-modal-card" style={{ maxWidth: "400px" }}>
-            <h2 style={{ fontSize: "20px", marginBottom: "20px", display: "flex", alignItems: "center", gap: "8px", fontWeight: 700 }}>
-              <Store size={20} style={{ color: "var(--accent-primary)" }} />
-              {editingRegisterId ? "Editar Caja" : "Agregar Nueva Caja"}
-            </h2>
+            <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: "20px" }}>
+              <h2 style={{ fontSize: "20px", margin: 0, display: "flex", alignItems: "center", gap: "8px", fontWeight: 700 }}>
+                <Store size={20} style={{ color: "var(--accent-primary)" }} />
+                {editingRegisterId ? "Editar Caja" : "Agregar Nueva Caja"}
+              </h2>
+              <button
+                type="button"
+                onClick={() => setShowRegisterModal(false)}
+                className="global-modal-close-btn"
+                title="Cerrar"
+              >
+                <X size={20} />
+              </button>
+            </div>
 
             <form onSubmit={handleSaveRegister} style={{ display: "flex", flexDirection: "column", gap: "15px" }}>
               <div className="input-group">
@@ -3738,17 +3925,33 @@ export const Settings: React.FC = () => {
               </div>
             </form>
           </div>
-        </div>
+        </div>,
+        document.body
       )}
       
       {/* TABLE MODAL */}
-      {showTableModal && (
-        <div className="global-modal-overlay">
+      {showTableModal && createPortal(
+        <div 
+          className="global-modal-overlay"
+          onClick={(e) => {
+            if (e.target === e.currentTarget) setShowTableModal(false);
+          }}
+        >
           <div className="global-modal-card" style={{ maxWidth: "400px" }}>
-            <h2 style={{ fontSize: "20px", marginBottom: "20px", display: "flex", alignItems: "center", gap: "8px", fontWeight: 700 }}>
-              <QrCode size={20} style={{ color: "var(--accent-primary)" }} />
-              {editingTableId ? "Editar Mesa" : "Crear Nueva Mesa"}
-            </h2>
+            <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: "20px" }}>
+              <h2 style={{ fontSize: "20px", margin: 0, display: "flex", alignItems: "center", gap: "8px", fontWeight: 700 }}>
+                <QrCode size={20} style={{ color: "var(--accent-primary)" }} />
+                {editingTableId ? "Editar Mesa" : "Crear Nueva Mesa"}
+              </h2>
+              <button
+                type="button"
+                onClick={() => setShowTableModal(false)}
+                className="global-modal-close-btn"
+                title="Cerrar"
+              >
+                <X size={20} />
+              </button>
+            </div>
 
             <form onSubmit={handleSaveTable} style={{ display: "flex", flexDirection: "column", gap: "15px" }}>
               <div className="input-group">
@@ -3794,16 +3997,32 @@ export const Settings: React.FC = () => {
               </div>
             </form>
           </div>
-        </div>
+        </div>,
+        document.body
       )}
 
       {/* SUPPLY MODAL */}
-      {showSupplyModal && (
-        <div className="global-modal-overlay">
+      {showSupplyModal && createPortal(
+        <div 
+          className="global-modal-overlay"
+          onClick={(e) => {
+            if (e.target === e.currentTarget) setShowSupplyModal(false);
+          }}
+        >
           <div className="global-modal-card" style={{ maxWidth: "450px" }}>
-            <h2 style={{ fontSize: "20px", marginBottom: "20px", fontWeight: 700 }}>
-              {editingSupplyId ? "Editar Insumo" : "Agregar Nuevo Insumo"}
-            </h2>
+            <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: "20px" }}>
+              <h2 style={{ fontSize: "20px", margin: 0, fontWeight: 700 }}>
+                {editingSupplyId ? "Editar Insumo" : "Agregar Nuevo Insumo"}
+              </h2>
+              <button
+                type="button"
+                onClick={() => setShowSupplyModal(false)}
+                className="global-modal-close-btn"
+                title="Cerrar"
+              >
+                <X size={20} />
+              </button>
+            </div>
             <form onSubmit={handleSaveSupply} style={{ display: "flex", flexDirection: "column", gap: "15px" }}>
               <div className="input-group">
                 <label>Nombre de Insumo *</label>
@@ -3900,16 +4119,32 @@ export const Settings: React.FC = () => {
               </div>
             </form>
           </div>
-        </div>
+        </div>,
+        document.body
       )}
 
       {/* SUPPLIER MODAL */}
-      {showSupplierModal && (
-        <div className="global-modal-overlay">
+      {showSupplierModal && createPortal(
+        <div 
+          className="global-modal-overlay"
+          onClick={(e) => {
+            if (e.target === e.currentTarget) setShowSupplierModal(false);
+          }}
+        >
           <div className="global-modal-card" style={{ maxWidth: "450px" }}>
-            <h2 style={{ fontSize: "20px", marginBottom: "20px", fontWeight: 700 }}>
-              {editingSupplierId ? "Editar Proveedor" : "Agregar Proveedor"}
-            </h2>
+            <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: "20px" }}>
+              <h2 style={{ fontSize: "20px", margin: 0, fontWeight: 700 }}>
+                {editingSupplierId ? "Editar Proveedor" : "Agregar Proveedor"}
+              </h2>
+              <button
+                type="button"
+                onClick={() => setShowSupplierModal(false)}
+                className="global-modal-close-btn"
+                title="Cerrar"
+              >
+                <X size={20} />
+              </button>
+            </div>
             <form onSubmit={handleSaveSupplier} style={{ display: "flex", flexDirection: "column", gap: "15px" }}>
               <div className="input-group">
                 <label>Nombre Comercial / Razón Social *</label>
@@ -3986,16 +4221,32 @@ export const Settings: React.FC = () => {
               </div>
             </form>
           </div>
-        </div>
+        </div>,
+        document.body
       )}
 
       {/* ADJUSTMENT MODAL */}
-      {showAdjustmentModal && (
-        <div className="global-modal-overlay">
+      {showAdjustmentModal && createPortal(
+        <div 
+          className="global-modal-overlay"
+          onClick={(e) => {
+            if (e.target === e.currentTarget) setShowAdjustmentModal(false);
+          }}
+        >
           <div className="global-modal-card" style={{ maxWidth: "450px" }}>
-            <h2 style={{ fontSize: "20px", marginBottom: "20px", fontWeight: 700 }}>
-              Registrar Ajuste Manual / Merma
-            </h2>
+            <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: "20px" }}>
+              <h2 style={{ fontSize: "20px", margin: 0, fontWeight: 700 }}>
+                Registrar Ajuste Manual / Merma
+              </h2>
+              <button
+                type="button"
+                onClick={() => setShowAdjustmentModal(false)}
+                className="global-modal-close-btn"
+                title="Cerrar"
+              >
+                <X size={20} />
+              </button>
+            </div>
             <form onSubmit={handleSaveAdjustment} style={{ display: "flex", flexDirection: "column", gap: "15px" }}>
               <div className="input-group">
                 <label>Insumo / Ingrediente *</label>
@@ -4056,17 +4307,39 @@ export const Settings: React.FC = () => {
               </div>
             </form>
           </div>
-        </div>
+        </div>,
+        document.body
       )}
 
       {/* PAY CREDIT MODAL */}
-      {showPayCreditModal && selectedCredit && (
-        <div className="global-modal-overlay">
+      {showPayCreditModal && selectedCredit && createPortal(
+        <div 
+          className="global-modal-overlay"
+          onClick={(e) => {
+            if (e.target === e.currentTarget) {
+              setShowPayCreditModal(false);
+              setSelectedCredit(null);
+            }
+          }}
+        >
           <div className="global-modal-card" style={{ maxWidth: "400px" }}>
-            <h2 style={{ fontSize: "18px", marginBottom: "15px", fontWeight: 700, display: "flex", alignItems: "center", gap: "8px" }}>
-              <DollarSign size={18} style={{ color: "var(--success)" }} />
-              Abonar a Cuenta por Pagar
-            </h2>
+            <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: "15px" }}>
+              <h2 style={{ fontSize: "18px", margin: 0, fontWeight: 700, display: "flex", alignItems: "center", gap: "8px" }}>
+                <DollarSign size={18} style={{ color: "var(--success)" }} />
+                Abonar a Cuenta por Pagar
+              </h2>
+              <button
+                type="button"
+                onClick={() => {
+                  setShowPayCreditModal(false);
+                  setSelectedCredit(null);
+                }}
+                className="global-modal-close-btn"
+                title="Cerrar"
+              >
+                <X size={20} />
+              </button>
+            </div>
             <p style={{ fontSize: "12px", color: "var(--text-secondary)", marginBottom: "15px" }}>
               Registra un pago de crédito para el proveedor <strong>{selectedCredit.purchase?.supplier?.businessName}</strong>. 
               El saldo pendiente total es de <strong>${(selectedCredit.totalAmount - selectedCredit.paidAmount).toFixed(2)}</strong>.
@@ -4096,7 +4369,8 @@ export const Settings: React.FC = () => {
               </div>
             </form>
           </div>
-        </div>
+        </div>,
+        document.body
       )}
 
       {/* TABLE QR MODAL */}

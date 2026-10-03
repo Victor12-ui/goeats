@@ -1,10 +1,10 @@
 import dotenv from "dotenv";
-dotenv.config();
+dotenv.config({ override: true });
 
 export const env = {
   PORT: parseInt(process.env.PORT || "5000", 10),
-  DATABASE_URL: process.env.DATABASE_URL || "mysql://root:@localhost:3306/goeats",
-  JWT_SECRET: process.env.JWT_SECRET || "goeats_super_secret_key_sri_saas_2026",
+  DATABASE_URL: process.env.DATABASE_URL || "mysql://root:@127.0.0.1:3309/goeats",
+  JWT_SECRET: process.env.JWT_SECRET || "2GrGBfroFwsse0krmg4geOjlUp/UvjQWrpgsgiyh1BM=",
   NODE_ENV: process.env.NODE_ENV || "development",
   
   SMTP_HOST: process.env.SMTP_HOST || "server3651.hostingsupremo.net",

@@ -1246,28 +1246,31 @@ button, input, select, textarea {
 /* Premium Global Modal System */
 .global-modal-overlay {
   position: fixed !important;
+  inset: 0 !important;
   top: 0 !important;
   left: 0 !important;
   right: 0 !important;
   bottom: 0 !important;
   width: 100vw !important;
   height: 100vh !important;
-  background-color: rgba(0, 0, 0, 0.45) !important;
+  background-color: rgba(15, 23, 42, 0.6) !important;
   display: flex !important;
   align-items: center !important;
   justify-content: center !important;
-  z-index: 99999 !important; /* Forces layout overlap */
-  backdrop-filter: blur(4px) !important;
-  -webkit-backdrop-filter: blur(4px) !important;
+  z-index: 999999 !important; /* Highest layer over sidebar and viewport */
+  backdrop-filter: blur(6px) !important;
+  -webkit-backdrop-filter: blur(6px) !important;
   animation: modalFadeIn 0.2s cubic-bezier(0.4, 0, 0.2, 1) forwards !important;
   padding: 20px !important;
+  box-sizing: border-box !important;
+  overflow-y: auto !important;
 }
 
 .global-modal-card {
   background: var(--bg-secondary) !important;
   border: 1px solid var(--border-light) !important;
   border-radius: var(--radius-lg) !important;
-  box-shadow: 0 20px 40px rgba(0, 0, 0, 0.08) !important;
+  box-shadow: 0 25px 50px -12px rgba(0, 0, 0, 0.25) !important;
   padding: 30px !important;
   width: 100% !important;
   max-width: 480px;
@@ -1275,6 +1278,26 @@ button, input, select, textarea {
   animation: modalScaleUp 0.25s cubic-bezier(0.34, 1.56, 0.64, 1) forwards !important;
   max-height: 90vh !important;
   overflow-y: auto !important;
+  margin: auto !important;
+  box-sizing: border-box !important;
+}
+
+.global-modal-close-btn {
+  background: transparent !important;
+  border: none !important;
+  cursor: pointer !important;
+  color: var(--text-muted) !important;
+  padding: 6px !important;
+  border-radius: 50% !important;
+  display: inline-flex !important;
+  align-items: center !important;
+  justify-content: center !important;
+  transition: var(--transition-fast) !important;
+}
+
+.global-modal-close-btn:hover {
+  background: var(--bg-tertiary) !important;
+  color: var(--danger) !important;
 }
 
 @keyframes modalFadeIn {
@@ -1287,6 +1310,71 @@ button, input, select, textarea {
   to { transform: scale(1); opacity: 1; }
 }
 
+/* ==========================================
+   CUSTOMER DASHBOARD & PROFILE RESPONSIVE STYLES
+   ========================================== */
+.customer-dashboard-tabs {
+  display: flex !important;
+  gap: 8px !important;
+  overflow-x: auto !important;
+  -webkit-overflow-scrolling: touch !important;
+  scrollbar-width: none !important;
+  padding-bottom: 12px !important;
+  margin-bottom: 24px !important;
+  border-bottom: 1px solid #e2e8f0 !important;
+  width: 100% !important;
+}
 
+.customer-dashboard-tabs::-webkit-scrollbar {
+  display: none !important;
+}
 
+.customer-tab-btn {
+  display: inline-flex !important;
+  align-items: center !important;
+  justify-content: center !important;
+  gap: 8px !important;
+  padding: 10px 20px !important;
+  border-radius: 30px !important;
+  font-size: 14px !important;
+  font-weight: 700 !important;
+  white-space: nowrap !important;
+  flex-shrink: 0 !important;
+  cursor: pointer !important;
+  transition: all 0.2s ease !important;
+}
 
+@media (max-width: 640px) {
+  .customer-dashboard-container {
+    padding: 0 14px !important;
+    margin: 16px auto !important;
+  }
+  .customer-dashboard-header {
+    flex-direction: column !important;
+    align-items: flex-start !important;
+    gap: 12px !important;
+    margin-bottom: 20px !important;
+  }
+  .customer-dashboard-pref-btn {
+    width: 100% !important;
+    justify-content: center !important;
+  }
+  .customer-tab-btn {
+    padding: 8px 14px !important;
+    font-size: 13px !important;
+    gap: 6px !important;
+  }
+  .customer-profile-hero {
+    padding: 20px 16px !important;
+    border-radius: 16px !important;
+    gap: 14px !important;
+  }
+  .customer-profile-card {
+    padding: 18px 14px !important;
+    border-radius: 14px !important;
+  }
+  .customer-profile-btn-full {
+    width: 100% !important;
+    justify-content: center !important;
+  }
+}

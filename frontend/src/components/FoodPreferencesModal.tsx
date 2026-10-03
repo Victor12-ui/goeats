@@ -1,4 +1,5 @@
 import React, { useState, useEffect } from "react";
+import { createPortal } from "react-dom";
 import { Sparkles, Check, X } from "lucide-react";
 import { apiRequest } from "../utils/api";
 import { useAuth } from "../context/AuthContext";
@@ -118,7 +119,7 @@ export const FoodPreferencesModal: React.FC<FoodPreferencesModalProps> = ({
     }
   };
 
-  return (
+  return createPortal(
     <div style={{
       position: "fixed",
       top: 0,
@@ -127,7 +128,7 @@ export const FoodPreferencesModal: React.FC<FoodPreferencesModalProps> = ({
       height: "100%",
       backgroundColor: "rgba(15, 23, 42, 0.75)",
       backdropFilter: "blur(8px)",
-      zIndex: 99999,
+      zIndex: 999999,
       display: "flex",
       alignItems: "center",
       justifyContent: "center",
@@ -138,18 +139,18 @@ export const FoodPreferencesModal: React.FC<FoodPreferencesModalProps> = ({
         backgroundColor: "#ffffff",
         borderRadius: "24px",
         width: "100%",
-        maxWidth: "680px",
+        maxWidth: "600px",
         boxShadow: "0 25px 50px -12px rgba(0, 0, 0, 0.35)",
         overflow: "hidden",
         position: "relative",
         display: "flex",
         flexDirection: "column",
-        maxHeight: "92vh",
+        maxHeight: "90vh",
         border: "1px solid rgba(226, 232, 240, 0.8)",
       }}>
         {/* Top Header */}
         <div style={{
-          padding: "24px 28px 16px",
+          padding: "20px 22px 14px",
           borderBottom: "1px solid #f1f5f9",
           display: "flex",
           justifyContent: "space-between",
@@ -244,11 +245,11 @@ export const FoodPreferencesModal: React.FC<FoodPreferencesModalProps> = ({
 
         {/* Category Grid */}
         <div style={{
-          padding: "20px 28px",
+          padding: "16px 20px",
           overflowY: "auto",
           display: "grid",
-          gridTemplateColumns: "repeat(auto-fill, minmax(180px, 1fr))",
-          gap: "14px",
+          gridTemplateColumns: "repeat(auto-fill, minmax(130px, 1fr))",
+          gap: "10px",
           flex: 1,
         }}>
           {FOOD_PREFERENCE_CATEGORIES.map((cat) => {
@@ -258,12 +259,12 @@ export const FoodPreferencesModal: React.FC<FoodPreferencesModalProps> = ({
                 key={cat.id}
                 onClick={() => toggleCategory(cat.id)}
                 style={{
-                  borderRadius: "16px",
-                  padding: "14px",
+                  borderRadius: "14px",
+                  padding: "12px",
                   cursor: "pointer",
                   border: isSelected ? "2px solid #ff4757" : "1px solid #e2e8f0",
                   backgroundColor: isSelected ? "rgba(255, 71, 87, 0.04)" : "#ffffff",
-                  boxShadow: isSelected ? "0 4px 14px rgba(255, 71, 87, 0.15)" : "0 2px 4px rgba(0, 0, 0, 0.02)",
+                  boxShadow: isSelected ? "0 4px 12px rgba(255, 71, 87, 0.12)" : "0 2px 4px rgba(0, 0, 0, 0.02)",
                   transition: "all 0.18s ease-in-out",
                   position: "relative",
                   display: "flex",
@@ -272,11 +273,11 @@ export const FoodPreferencesModal: React.FC<FoodPreferencesModalProps> = ({
                 }}
               >
                 {/* Header row with emoji & check badge */}
-                <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: "8px" }}>
-                  <span style={{ fontSize: "28px" }}>{cat.emoji}</span>
+                <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: "6px" }}>
+                  <span style={{ fontSize: "24px" }}>{cat.emoji}</span>
                   <div style={{
-                    width: "22px",
-                    height: "22px",
+                    width: "20px",
+                    height: "20px",
                     borderRadius: "50%",
                     display: "flex",
                     alignItems: "center",
@@ -285,23 +286,23 @@ export const FoodPreferencesModal: React.FC<FoodPreferencesModalProps> = ({
                     color: "#ffffff",
                     transition: "all 0.18s ease",
                   }}>
-                    {isSelected ? <Check size={14} strokeWidth={3} /> : null}
+                    {isSelected ? <Check size={12} strokeWidth={3} /> : null}
                   </div>
                 </div>
 
                 <div style={{
-                  fontSize: "14px",
+                  fontSize: "13px",
                   fontWeight: 700,
                   color: isSelected ? "#ff4757" : "#1e293b",
-                  marginBottom: "4px",
+                  marginBottom: "2px",
                 }}>
                   {cat.name}
                 </div>
 
                 <div style={{
-                  fontSize: "11px",
+                  fontSize: "10.5px",
                   color: "#64748b",
-                  lineHeight: "1.3"
+                  lineHeight: "1.25"
                 }}>
                   {cat.description}
                 </div>
@@ -312,25 +313,25 @@ export const FoodPreferencesModal: React.FC<FoodPreferencesModalProps> = ({
 
         {/* Footer */}
         <div style={{
-          padding: "16px 28px",
+          padding: "14px 20px",
           borderTop: "1px solid #f1f5f9",
           display: "flex",
           justifyContent: "space-between",
           alignItems: "center",
-          gap: "12px",
+          gap: "10px",
           backgroundColor: "#ffffff",
         }}>
           <button
             type="button"
             onClick={onClose}
             style={{
-              padding: "12px 20px",
-              borderRadius: "12px",
+              padding: "10px 16px",
+              borderRadius: "10px",
               border: "1px solid #e2e8f0",
               backgroundColor: "transparent",
               color: "#64748b",
               fontWeight: 600,
-              fontSize: "14px",
+              fontSize: "13px",
               cursor: "pointer",
             }}
           >
@@ -343,16 +344,16 @@ export const FoodPreferencesModal: React.FC<FoodPreferencesModalProps> = ({
             disabled={isSaving}
             style={{
               flex: 1,
-              maxWidth: "320px",
-              padding: "13px 24px",
-              borderRadius: "12px",
+              maxWidth: "280px",
+              padding: "11px 20px",
+              borderRadius: "10px",
               border: "none",
               background: "linear-gradient(135deg, #ff4757, #ff6b81)",
               color: "#ffffff",
               fontWeight: 700,
-              fontSize: "14px",
+              fontSize: "13px",
               cursor: "pointer",
-              boxShadow: "0 4px 15px rgba(255, 71, 87, 0.35)",
+              boxShadow: "0 4px 12px rgba(255, 71, 87, 0.3)",
               display: "flex",
               alignItems: "center",
               justifyContent: "center",
@@ -360,11 +361,12 @@ export const FoodPreferencesModal: React.FC<FoodPreferencesModalProps> = ({
               transition: "transform 0.15s ease",
             }}
           >
-            <Sparkles size={16} />
+            <Sparkles size={15} />
             {isSaving ? "Guardando..." : "Guardar y Personalizar"}
           </button>
         </div>
       </div>
-    </div>
+    </div>,
+    document.body
   );
 };

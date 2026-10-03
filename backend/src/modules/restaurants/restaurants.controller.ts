@@ -10,9 +10,10 @@ import { NotificationService } from "../notifications/notification.service";
 export async function getAllRestaurants(req: Request, res: Response, next: NextFunction) {
   try {
     const restaurants = await prisma.restaurant.findMany({
+      orderBy: { createdAt: "desc" },
       include: {
         users: {
-          select: { id: true, username: true, name: true, role: true },
+          select: { id: true, username: true, name: true, role: true, email: true, phone: true, isActive: true },
         },
         issuer: true,
       },
@@ -90,6 +91,13 @@ export async function updateRestaurant(req: Request, res: Response, next: NextFu
       subcategoryIds,
     } = req.body;
 
+    const parsedLat = (mapLatitude !== undefined && mapLatitude !== null && mapLatitude !== "") ? parseFloat(mapLatitude) : null;
+    const parsedLng = (mapLongitude !== undefined && mapLongitude !== null && mapLongitude !== "") ? parseFloat(mapLongitude) : null;
+    let finalMapIframe = mapIframe;
+    if (parsedLat && parsedLng && (!finalMapIframe || !finalMapIframe.includes("<iframe"))) {
+      finalMapIframe = `<iframe src="https://maps.google.com/maps?q=${parsedLat},${parsedLng}&z=16&output=embed" width="100%" height="300" style="border:0;" allowfullscreen="" loading="lazy"></iframe>`;
+    }
+
     const restaurant = await prisma.restaurant.update({
       where: { id },
       data: {
@@ -104,9 +112,9 @@ export async function updateRestaurant(req: Request, res: Response, next: NextFu
         bankAccountsJson,
         coverImage,
         description,
-        mapLatitude: (mapLatitude !== undefined && mapLatitude !== null && mapLatitude !== "") ? parseFloat(mapLatitude) : null,
-        mapLongitude: (mapLongitude !== undefined && mapLongitude !== null && mapLongitude !== "") ? parseFloat(mapLongitude) : null,
-        mapIframe,
+        mapLatitude: parsedLat,
+        mapLongitude: parsedLng,
+        mapIframe: finalMapIframe,
         reference,
         openingHours,
         faqsJson,
@@ -553,4 +561,336 @@ export async function callWaiterFromTable(req: Request, res: Response, next: Nex
     next(error);
   }
 }
+
+/**
+ * Resuelve cualquier enlace de Google Maps (incluyendo links acortados como https://maps.app.goo.gl/...)
+ * e infiere las coordenadas geográficas exactas (latitud, longitud y nombre del local).
+ */
+export async function resolveMapsUrl(req: Request, res: Response, next: NextFunction) {
+  try {
+    const { url } = req.body;
+    if (!url || typeof url !== "string") {
+      return res.status(400).json({ success: false, message: "El campo url es requerido." });
+    }
+
+    const trimmedUrl = url.trim();
+
+    // 1. Extraer URL de iframe si el usuario pegó el código embed completo
+    const iframeMatch = trimmedUrl.match(/src="([^"]+)"/i);
+    const candidateUrl = iframeMatch ? iframeMatch[1] : trimmedUrl;
+
+    // A. Coordenadas explícitas de lugar en URLs completas: !3d(lat)!4d(lng)
+    const placeCoordsMatch = candidateUrl.match(/!3d(-?\d+\.\d+)!4d(-?\d+\.\d+)/);
+    if (placeCoordsMatch) {
+      return res.status(200).json({
+        success: true,
+        lat: parseFloat(placeCoordsMatch[1]),
+        lng: parseFloat(placeCoordsMatch[2]),
+        resolvedUrl: candidateUrl,
+      });
+    }
+
+    // B. Coordenadas de cámara en URLs completas (sin ser acortador): @lat,lng
+    if (!candidateUrl.includes("maps.app.goo.gl") && !candidateUrl.includes("goo.gl/maps")) {
+      const atMatch = candidateUrl.match(/@(-?\d+\.\d+),(-?\d+\.\d+)/);
+      if (atMatch) {
+        return res.status(200).json({
+          success: true,
+          lat: parseFloat(atMatch[1]),
+          lng: parseFloat(atMatch[2]),
+          resolvedUrl: candidateUrl,
+        });
+      }
+
+      const qMatch = candidateUrl.match(/[?&](?:q|ll)=(-?\d+\.\d+),(-?\d+\.\d+)/);
+      if (qMatch) {
+        return res.status(200).json({
+          success: true,
+          lat: parseFloat(qMatch[1]),
+          lng: parseFloat(qMatch[2]),
+          resolvedUrl: candidateUrl,
+        });
+      }
+    }
+
+    // 2. Seguir redirección HTTP para links acortados (maps.app.goo.gl, etc.)
+    let resolvedUrl = candidateUrl;
+    let htmlBody = "";
+
+    try {
+      const response = await fetch(candidateUrl, {
+        method: "GET",
+        redirect: "follow",
+        headers: {
+          "User-Agent":
+            "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36",
+          "Accept": "text/html,application/xhtml+xml,application/xml;q=0.9,*/*;q=0.8",
+          "Accept-Language": "es,en;q=0.9",
+        },
+      });
+
+      resolvedUrl = response.url || candidateUrl;
+      htmlBody = await response.text();
+    } catch (fetchErr: any) {
+      console.warn("[resolveMapsUrl] Error siguiendo redirección:", fetchErr.message);
+    }
+
+    // Extraer nombre del lugar de la URL si está presente (/place/Nombre+Del+Lugar/...)
+    let placeName: string | undefined;
+    const placeNameMatch = resolvedUrl.match(/\/place\/([^/@?]+)/);
+    if (placeNameMatch) {
+      try {
+        placeName = decodeURIComponent(placeNameMatch[1].replace(/\+/g, " "));
+      } catch (e) {
+        placeName = placeNameMatch[1].replace(/\+/g, " ");
+      }
+    }
+
+    // Prioridad 1: Coordenadas precisas del pin del local !3d(lat)!4d(lng)
+    const finalPlaceMatch = resolvedUrl.match(/!3d(-?\d+\.\d+)!4d(-?\d+\.\d+)/);
+    if (finalPlaceMatch) {
+      return res.status(200).json({
+        success: true,
+        lat: parseFloat(finalPlaceMatch[1]),
+        lng: parseFloat(finalPlaceMatch[2]),
+        placeName,
+        resolvedUrl,
+      });
+    }
+
+    // Prioridad 2: Coordenadas de cámara @lat,lng
+    const finalAtMatch = resolvedUrl.match(/@(-?\d+\.\d+),(-?\d+\.\d+)/);
+    if (finalAtMatch) {
+      return res.status(200).json({
+        success: true,
+        lat: parseFloat(finalAtMatch[1]),
+        lng: parseFloat(finalAtMatch[2]),
+        placeName,
+        resolvedUrl,
+      });
+    }
+
+    // Prioridad 3: Parámetros q o ll
+    const finalQMatch = resolvedUrl.match(/[?&](?:q|ll)=(-?\d+\.\d+),(-?\d+\.\d+)/);
+    if (finalQMatch) {
+      return res.status(200).json({
+        success: true,
+        lat: parseFloat(finalQMatch[1]),
+        lng: parseFloat(finalQMatch[2]),
+        placeName,
+        resolvedUrl,
+      });
+    }
+
+    // Prioridad 4: Meta tag center en el HTML retornado por Google
+    const metaCenterMatch = htmlBody.match(/center=(-?\d+\.\d+)(?:%2C|,)(-?\d+\.\d+)/i);
+    if (metaCenterMatch) {
+      return res.status(200).json({
+        success: true,
+        lat: parseFloat(metaCenterMatch[1]),
+        lng: parseFloat(metaCenterMatch[2]),
+        placeName,
+        resolvedUrl,
+      });
+    }
+
+    // Prioridad 5: Coordenadas JSON o Schema en el cuerpo
+    const geoMatch =
+      htmlBody.match(/"latitude":\s*(-?\d+\.\d+)[^}]*"longitude":\s*(-?\d+\.\d+)/i) ||
+      htmlBody.match(/\[null,null,(-?\d+\.\d+),(-?\d+\.\d+)\]/);
+    if (geoMatch) {
+      return res.status(200).json({
+        success: true,
+        lat: parseFloat(geoMatch[1]),
+        lng: parseFloat(geoMatch[2]),
+        placeName,
+        resolvedUrl,
+      });
+    }
+
+    return res.status(404).json({
+      success: false,
+      message: "No se pudieron extraer las coordenadas del enlace de Google Maps proporcionado.",
+      resolvedUrl,
+    });
+  } catch (error) {
+    next(error);
+  }
+}
+
+export async function approveRestaurant(req: Request, res: Response, next: NextFunction) {
+  try {
+    const id = parseInt(req.params.id, 10);
+    if (isNaN(id)) {
+      return res.status(400).json({ success: false, message: "ID de restaurante inválido" });
+    }
+
+    const restaurant = await prisma.restaurant.findUnique({
+      where: { id },
+      include: {
+        users: {
+          where: { role: "RESTAURANT_OWNER" },
+          select: { id: true, name: true, email: true, username: true, phone: true },
+        },
+      },
+    });
+
+    if (!restaurant) {
+      return res.status(404).json({ success: false, message: "Restaurante no encontrado" });
+    }
+
+    const updated = await prisma.restaurant.update({
+      where: { id },
+      data: {
+        status: "APPROVED",
+        isActive: true,
+      },
+      include: {
+        users: {
+          select: { id: true, username: true, name: true, role: true, email: true, phone: true, isActive: true },
+        },
+        issuer: true,
+      },
+    });
+
+    // Activar al propietario
+    await prisma.user.updateMany({
+      where: { restaurantId: id, role: "RESTAURANT_OWNER" },
+      data: { isActive: true },
+    });
+
+    // Enviar correo de aprobación si el dueño tiene email
+    const owner = restaurant.users[0];
+    if (owner && owner.email) {
+      NotificationService.notifyRestaurantApproved(
+        { id: restaurant.id, name: restaurant.name },
+        { id: owner.id, name: owner.name, email: owner.email }
+      ).catch((e) => console.warn("[Email] Error approved restaurant:", e));
+    }
+
+    return res.status(200).json({
+      success: true,
+      message: `Restaurante "${restaurant.name}" aprobado exitosamente. La cuenta del propietario ha sido activada y se ha notificado por correo electrónico.`,
+      restaurant: updated,
+    });
+  } catch (error) {
+    next(error);
+  }
+}
+
+export async function rejectRestaurant(req: Request, res: Response, next: NextFunction) {
+  try {
+    const id = parseInt(req.params.id, 10);
+    if (isNaN(id)) {
+      return res.status(400).json({ success: false, message: "ID de restaurante inválido" });
+    }
+
+    const { reason } = req.body;
+
+    const restaurant = await prisma.restaurant.findUnique({
+      where: { id },
+      include: {
+        users: {
+          where: { role: "RESTAURANT_OWNER" },
+          select: { id: true, name: true, email: true, username: true },
+        },
+      },
+    });
+
+    if (!restaurant) {
+      return res.status(404).json({ success: false, message: "Restaurante no encontrado" });
+    }
+
+    const updated = await prisma.restaurant.update({
+      where: { id },
+      data: {
+        status: "REJECTED",
+        isActive: false,
+      },
+      include: {
+        users: {
+          select: { id: true, username: true, name: true, role: true, email: true, phone: true, isActive: true },
+        },
+        issuer: true,
+      },
+    });
+
+    // Desactivar al propietario
+    await prisma.user.updateMany({
+      where: { restaurantId: id, role: "RESTAURANT_OWNER" },
+      data: { isActive: false },
+    });
+
+    // Enviar correo de rechazo con el motivo
+    const owner = restaurant.users[0];
+    if (owner && owner.email) {
+      NotificationService.notifyRestaurantRejected(
+        { id: restaurant.id, name: restaurant.name },
+        { id: owner.id, name: owner.name, email: owner.email },
+        reason
+      ).catch((e) => console.warn("[Email] Error rejected restaurant:", e));
+    }
+
+    return res.status(200).json({
+      success: true,
+      message: `Restaurante "${restaurant.name}" ha sido rechazado.`,
+      restaurant: updated,
+    });
+  } catch (error) {
+    next(error);
+  }
+}
+
+export async function reviewRestaurant(req: Request, res: Response, next: NextFunction) {
+  try {
+    const id = parseInt(req.params.id, 10);
+    if (isNaN(id)) {
+      return res.status(400).json({ success: false, message: "ID de restaurante inválido" });
+    }
+
+    const restaurant = await prisma.restaurant.findUnique({
+      where: { id },
+      include: {
+        users: {
+          where: { role: "RESTAURANT_OWNER" },
+          select: { id: true, name: true, email: true, username: true },
+        },
+      },
+    });
+
+    if (!restaurant) {
+      return res.status(404).json({ success: false, message: "Restaurante no encontrado" });
+    }
+
+    const updated = await prisma.restaurant.update({
+      where: { id },
+      data: {
+        status: "UNDER_REVIEW",
+      },
+      include: {
+        users: {
+          select: { id: true, username: true, name: true, role: true, email: true, phone: true, isActive: true },
+        },
+        issuer: true,
+      },
+    });
+
+    const owner = restaurant.users[0];
+    if (owner && owner.email) {
+      NotificationService.notifyRestaurantUnderReview(
+        { id: restaurant.id, name: restaurant.name },
+        { id: owner.id, name: owner.name, email: owner.email }
+      ).catch((e) => console.warn("[Email] Error under review restaurant:", e));
+    }
+
+    return res.status(200).json({
+      success: true,
+      message: `Restaurante "${restaurant.name}" puesto en estado En Revisión.`,
+      restaurant: updated,
+    });
+  } catch (error) {
+    next(error);
+  }
+}
+
 

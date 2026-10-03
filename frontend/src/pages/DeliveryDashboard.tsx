@@ -9,9 +9,11 @@ import {
   AlertTriangle,
   CheckCircle,
   FileText,
-  RefreshCw
+  RefreshCw,
+  HelpCircle
 } from "lucide-react";
 import { RouteMap } from "../components/RouteMap";
+import { SupportModal } from "../components/SupportModal";
 
 interface Order {
   id: number;
@@ -87,6 +89,8 @@ export const DeliveryDashboard: React.FC = () => {
   const [observationText, setObservationText] = useState<{ [key: number]: string }>({});
   const [showObsInput, setShowObsInput] = useState<{ [key: number]: boolean }>({});
   const [showMapForOrder, setShowMapForOrder] = useState<{ [key: number]: boolean }>({});
+  const [isSupportOpen, setIsSupportOpen] = useState(false);
+  const [supportOrderId, setSupportOrderId] = useState<number | undefined>(undefined);
 
   // SaaS States
   const [plans, setPlans] = useState<any[]>([]);
@@ -307,6 +311,30 @@ export const DeliveryDashboard: React.FC = () => {
               </div>
             </div>
           </div>
+
+          <button
+            onClick={() => {
+              setSupportOrderId(undefined);
+              setIsSupportOpen(true);
+            }}
+            style={{
+              padding: "8px 16px",
+              borderRadius: "var(--radius-md)",
+              backgroundColor: "rgba(239, 68, 68, 0.1)",
+              border: "1px solid rgba(239, 68, 68, 0.3)",
+              color: "#dc2626",
+              fontWeight: "700",
+              fontSize: "13px",
+              cursor: "pointer",
+              display: "flex",
+              alignItems: "center",
+              gap: "6px"
+            }}
+            title="Línea de emergencia y ayuda para motorizados"
+          >
+            <HelpCircle size={16} />
+            SOS / Soporte en Ruta
+          </button>
 
           <button
             onClick={loadData}
@@ -771,23 +799,50 @@ export const DeliveryDashboard: React.FC = () => {
                           </div>
                         ) : (
                           <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", flexWrap: "wrap", gap: "10px" }}>
-                            <button
-                              onClick={() => setShowObsInput(prev => ({ ...prev, [order.id]: true }))}
-                              style={{
-                                background: "transparent",
-                                border: "none",
-                                color: "var(--text-secondary)",
-                                textDecoration: "underline",
-                                cursor: "pointer",
-                                fontSize: "13px",
-                                display: "flex",
-                                alignItems: "center",
-                                gap: "4px"
-                              }}
-                            >
-                              <FileText size={14} />
-                              Añadir Observación
-                            </button>
+                            <div style={{ display: "flex", gap: "12px", alignItems: "center", flexWrap: "wrap" }}>
+                              <button
+                                onClick={() => setShowObsInput(prev => ({ ...prev, [order.id]: true }))}
+                                style={{
+                                  background: "transparent",
+                                  border: "none",
+                                  color: "var(--text-secondary)",
+                                  textDecoration: "underline",
+                                  cursor: "pointer",
+                                  fontSize: "13px",
+                                  display: "flex",
+                                  alignItems: "center",
+                                  gap: "4px"
+                                }}
+                              >
+                                <FileText size={14} />
+                                Añadir Observación
+                              </button>
+
+                              <button
+                                type="button"
+                                onClick={() => {
+                                  setSupportOrderId(order.id);
+                                  setIsSupportOpen(true);
+                                }}
+                                style={{
+                                  background: "rgba(239, 68, 68, 0.08)",
+                                  border: "1px solid rgba(239, 68, 68, 0.25)",
+                                  borderRadius: "6px",
+                                  padding: "6px 12px",
+                                  color: "#dc2626",
+                                  cursor: "pointer",
+                                  fontSize: "12px",
+                                  fontWeight: "600",
+                                  display: "flex",
+                                  alignItems: "center",
+                                  gap: "4px"
+                                }}
+                                title="Reportar retraso en cocina, cliente no responde o avería"
+                              >
+                                <HelpCircle size={14} />
+                                Incidencia en Ruta
+                              </button>
+                            </div>
                             <button
                               onClick={() => handleCompleteOrder(order.id, order.requiresPin)}
                               disabled={actionLoading === order.id}
@@ -1154,6 +1209,17 @@ export const DeliveryDashboard: React.FC = () => {
           </div>
         </div>
       )}
+
+      {/* Support & Help Center Modal */}
+      <SupportModal
+        isOpen={isSupportOpen}
+        onClose={() => {
+          setIsSupportOpen(false);
+          setSupportOrderId(undefined);
+        }}
+        defaultRole="MOTORIZADO"
+        orderId={supportOrderId}
+      />
     </div>
   );
 };

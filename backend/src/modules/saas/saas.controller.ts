@@ -1,5 +1,6 @@
 import { Request, Response, NextFunction } from "express";
 import { prisma } from "../../config/database";
+import { safeDeleteUser } from "../auth/user-cleanup.service";
 
 // 1. Submit purchase request for recharge or subscription (Driver or Customer)
 export async function submitSaaSOrder(req: Request, res: Response, next: NextFunction) {
@@ -431,6 +432,41 @@ export async function deleteSaaSPlan(req: Request, res: Response, next: NextFunc
     });
 
     return res.status(200).json({ success: true, message: "Plan eliminado con éxito" });
+  } catch (error) {
+    next(error);
+  }
+}
+
+// 12. Delete customer account (SuperAdmin)
+export async function deleteCustomer(req: Request, res: Response, next: NextFunction) {
+  try {
+    const customerId = parseInt(req.params.id, 10);
+    if (isNaN(customerId)) {
+      return res.status(400).json({ success: false, message: "ID de cliente inválido" });
+    }
+
+    const customer = await prisma.user.findUnique({
+      where: { id: customerId },
+      select: { id: true, name: true, username: true, role: true },
+    });
+
+    if (!customer) {
+      return res.status(404).json({ success: false, message: "Cliente no encontrado" });
+    }
+
+    if (customer.role !== "CUSTOMER") {
+      return res.status(400).json({ success: false, message: "Solo se pueden eliminar cuentas con rol CLIENTE desde este apartado" });
+    }
+
+    const result = await safeDeleteUser(customerId);
+    if (!result.success) {
+      return res.status(500).json({ success: false, message: result.error || "Error al eliminar el cliente" });
+    }
+
+    return res.status(200).json({
+      success: true,
+      message: `Cliente ${customer.name} (@${customer.username}) eliminado exitosamente.`,
+    });
   } catch (error) {
     next(error);
   }

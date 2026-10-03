@@ -1,10 +1,11 @@
 import React, { useEffect, useState } from "react";
 import { useParams, useSearchParams, useNavigate, Link } from "react-router-dom";
 import { apiRequest } from "../utils/api";
-import { ShoppingCart, Wifi, MapPin, Phone, Utensils, Check, Plus, Minus, AlertCircle, Clock, X, ArrowLeft, BellRing, Receipt } from "lucide-react";
+import { ShoppingCart, Wifi, MapPin, Phone, Utensils, Check, Plus, Minus, AlertCircle, Clock, X, ArrowLeft, BellRing, Receipt, HelpCircle } from "lucide-react";
 import { useAuth } from "../context/AuthContext";
 import { useSocket } from "../context/SocketContext";
 import { LocationPickerMap } from "../components/LocationPickerMap";
+import { SupportModal } from "../components/SupportModal";
 
 interface Variant {
   id: number;
@@ -127,6 +128,7 @@ export const PublicCatalog: React.FC = () => {
   const [bankAccounts, setBankAccounts] = useState<any[]>([]);
   const [selectedBankAccId, setSelectedBankAccId] = useState<string>("");
   const [openFaqIndex, setOpenFaqIndex] = useState<number | null>(null);
+  const [supportModalOpen, setSupportModalOpen] = useState(false);
 
   const isPlusUser = isAuthenticated && user?.isPlus === true;
   const currentShippingCost = (orderType === "DELIVERY" && !isPlusUser)
@@ -1373,189 +1375,354 @@ export const PublicCatalog: React.FC = () => {
             )}
           </div>
 
-          {/* Local Information Card (Map, Reference, Hours) */}
-          <div className="glass-card" style={{ padding: "25px" }}>
-            <div style={{ display: "flex", alignItems: "center", gap: "10px", marginBottom: "15px", borderBottom: "1px solid var(--border-light)", paddingBottom: "10px" }}>
+          {/* Local Information Card (Address, Phone, WiFi, Hours, Reference, Map) */}
+          <div className="glass-card" style={{ padding: "22px", display: "flex", flexDirection: "column", gap: "14px" }}>
+            <div style={{ display: "flex", alignItems: "center", gap: "8px", borderBottom: "1px solid var(--border-light)", paddingBottom: "10px" }}>
               <MapPin size={18} color="var(--accent-primary)" />
-              <h3 style={{ fontSize: "1.1rem", margin: 0, fontWeight: "700" }}>Información del Local</h3>
+              <h3 style={{ fontSize: "1.05rem", margin: 0, fontWeight: "700", color: "var(--text-primary)" }}>
+                Información del Local
+              </h3>
             </div>
-            
+
+            {/* Physical Address */}
+            {restaurant.address && (
+              <div style={{ display: "flex", alignItems: "flex-start", gap: "10px" }}>
+                <div style={{
+                  width: "28px",
+                  height: "28px",
+                  borderRadius: "8px",
+                  backgroundColor: "rgba(255, 71, 87, 0.1)",
+                  color: "var(--accent-primary)",
+                  display: "flex",
+                  alignItems: "center",
+                  justifyContent: "center",
+                  flexShrink: 0,
+                  marginTop: "2px"
+                }}>
+                  <MapPin size={15} />
+                </div>
+                <div>
+                  <span style={{ fontSize: "11px", fontWeight: "700", color: "var(--text-secondary)", textTransform: "uppercase", letterSpacing: "0.5px", display: "block" }}>
+                    Dirección
+                  </span>
+                  <span style={{ fontSize: "13px", color: "var(--text-primary)", fontWeight: "500", lineHeight: 1.4 }}>
+                    {restaurant.address}
+                  </span>
+                </div>
+              </div>
+            )}
+
+            {/* Phone */}
+            {restaurant.phone && (
+              <div style={{ display: "flex", alignItems: "flex-start", gap: "10px" }}>
+                <div style={{
+                  width: "28px",
+                  height: "28px",
+                  borderRadius: "8px",
+                  backgroundColor: "rgba(46, 213, 115, 0.1)",
+                  color: "var(--success)",
+                  display: "flex",
+                  alignItems: "center",
+                  justifyContent: "center",
+                  flexShrink: 0,
+                  marginTop: "2px"
+                }}>
+                  <Phone size={15} />
+                </div>
+                <div>
+                  <span style={{ fontSize: "11px", fontWeight: "700", color: "var(--text-secondary)", textTransform: "uppercase", letterSpacing: "0.5px", display: "block" }}>
+                    Teléfono / Contacto
+                  </span>
+                  <a
+                    href={`tel:${restaurant.phone}`}
+                    style={{ fontSize: "13px", color: "var(--accent-primary)", fontWeight: "600", textDecoration: "none" }}
+                  >
+                    {restaurant.phone}
+                  </a>
+                </div>
+              </div>
+            )}
+
+            {/* WiFi de Cortesía */}
+            {restaurant.wifiSsid && (
+              <div style={{ display: "flex", alignItems: "flex-start", gap: "10px" }}>
+                <div style={{
+                  width: "28px",
+                  height: "28px",
+                  borderRadius: "8px",
+                  backgroundColor: "rgba(59, 130, 246, 0.1)",
+                  color: "#3b82f6",
+                  display: "flex",
+                  alignItems: "center",
+                  justifyContent: "center",
+                  flexShrink: 0,
+                  marginTop: "2px"
+                }}>
+                  <Wifi size={15} />
+                </div>
+                <div>
+                  <span style={{ fontSize: "11px", fontWeight: "700", color: "var(--text-secondary)", textTransform: "uppercase", letterSpacing: "0.5px", display: "block" }}>
+                    Wi-Fi de Cortesía
+                  </span>
+                  <span style={{ fontSize: "12px", color: "var(--text-primary)" }}>
+                    Red: <strong>{restaurant.wifiSsid}</strong>
+                    {restaurant.wifiPassword && (
+                      <span style={{ marginLeft: "6px", color: "var(--text-secondary)" }}>
+                        • Clave: <code style={{ backgroundColor: "var(--bg-tertiary)", padding: "2px 6px", borderRadius: "4px" }}>{restaurant.wifiPassword}</code>
+                      </span>
+                    )}
+                  </span>
+                </div>
+              </div>
+            )}
+
             {/* Opening hours */}
             {restaurant.openingHours && (
-              <div style={{ marginBottom: "15px" }}>
-                <div style={{ display: "flex", alignItems: "center", gap: "6px", fontSize: "0.9rem", color: "var(--text-secondary)", marginBottom: "4px" }}>
-                  <Clock size={15} />
-                  <strong>Horarios de Atención:</strong>
-                </div>
+              <div style={{ display: "flex", alignItems: "flex-start", gap: "10px" }}>
                 <div style={{
-                  padding: "8px 12px",
-                  borderRadius: "var(--radius-sm)",
-                  backgroundColor: "var(--bg-tertiary)",
-                  border: "1px solid var(--border-light)",
-                  fontSize: "0.85rem",
-                  fontWeight: "500"
+                  width: "28px",
+                  height: "28px",
+                  borderRadius: "8px",
+                  backgroundColor: "rgba(245, 158, 11, 0.1)",
+                  color: "#f59e0b",
+                  display: "flex",
+                  alignItems: "center",
+                  justifyContent: "center",
+                  flexShrink: 0,
+                  marginTop: "2px"
                 }}>
-                  {restaurant.openingHours}
+                  <Clock size={15} />
+                </div>
+                <div>
+                  <span style={{ fontSize: "11px", fontWeight: "700", color: "var(--text-secondary)", textTransform: "uppercase", letterSpacing: "0.5px", display: "block" }}>
+                    Horarios de Atención
+                  </span>
+                  <span style={{ fontSize: "12px", color: "var(--text-primary)", fontWeight: "500" }}>
+                    {restaurant.openingHours}
+                  </span>
                 </div>
               </div>
             )}
 
             {/* Reference */}
             {restaurant.reference && (
-              <div style={{ marginBottom: "15px" }}>
-                <strong style={{ fontSize: "0.9rem", color: "var(--text-secondary)", display: "block", marginBottom: "4px" }}>Referencia:</strong>
-                <p style={{ fontSize: "0.85rem", margin: 0, color: "var(--text-primary)" }}>{restaurant.reference}</p>
+              <div style={{
+                padding: "10px 12px",
+                borderRadius: "10px",
+                backgroundColor: "var(--bg-tertiary)",
+                border: "1px solid var(--border-light)"
+              }}>
+                <span style={{ fontSize: "11px", fontWeight: "700", color: "var(--text-secondary)", textTransform: "uppercase", letterSpacing: "0.5px", display: "block", marginBottom: "3px" }}>
+                  Referencia de Ubicación
+                </span>
+                <p style={{ fontSize: "12px", margin: 0, color: "var(--text-primary)", lineHeight: 1.4 }}>
+                  {restaurant.reference}
+                </p>
               </div>
             )}
 
-            {/* Google Map Embedded (Iframe) */}
-            {restaurant.mapIframe ? (
-              <div style={{ marginTop: "15px" }}>
-                <strong style={{ fontSize: "0.9rem", color: "var(--text-secondary)", display: "block", marginBottom: "8px" }}>Ubicación:</strong>
-                <div 
-                  style={{ 
-                    borderRadius: "var(--radius-md)", 
-                    overflow: "hidden", 
-                    border: "1px solid var(--border-light)",
-                    height: "200px" 
-                  }}
-                  dangerouslySetInnerHTML={{ 
-                    __html: restaurant.mapIframe
-                      .replace(/width="[^"]*"/g, 'width="100%"')
-                      .replace(/height="[^"]*"/g, 'height="100%"')
-                  }}
-                />
-              </div>
-            ) : (
-              restaurant.mapLatitude && restaurant.mapLongitude ? (
-                <div style={{ marginTop: "15px" }}>
-                  <a 
-                    href={`https://www.google.com/maps/search/?api=1&query=${restaurant.mapLatitude},${restaurant.mapLongitude}`}
-                    target="_blank" 
-                    rel="noopener noreferrer"
-                    className="secondary-btn"
-                    style={{ display: "flex", alignItems: "center", justifyContent: "center", gap: "8px", width: "100%", padding: "10px", fontSize: "0.85rem", textDecoration: "none" }}
-                  >
-                    <MapPin size={14} />
-                    Ver ubicación en Google Maps
-                  </a>
+            {/* Google Map Embedded */}
+            {(() => {
+              const hasIframe = Boolean(restaurant.mapIframe && restaurant.mapIframe.includes("<iframe"));
+              const hasCoords = Boolean(restaurant.mapLatitude && restaurant.mapLongitude);
+              const directMapUrl = restaurant.mapIframe && restaurant.mapIframe.startsWith("http")
+                ? restaurant.mapIframe
+                : hasCoords
+                  ? `https://www.google.com/maps/search/?api=1&query=${restaurant.mapLatitude},${restaurant.mapLongitude}`
+                  : restaurant.address
+                    ? `https://www.google.com/maps/search/?api=1&query=${encodeURIComponent(restaurant.address)}`
+                    : null;
+
+              if (!hasIframe && !hasCoords && !directMapUrl) return null;
+
+              return (
+                <div style={{ marginTop: "4px" }}>
+                  <span style={{ fontSize: "11px", fontWeight: "700", color: "var(--text-secondary)", textTransform: "uppercase", letterSpacing: "0.5px", display: "block", marginBottom: "8px" }}>
+                    Ubicación en el Mapa
+                  </span>
+
+                  {hasIframe ? (
+                    <div
+                      style={{
+                        borderRadius: "12px",
+                        overflow: "hidden",
+                        border: "1px solid var(--border-light)",
+                        height: "190px",
+                        boxShadow: "0 2px 8px rgba(0,0,0,0.05)"
+                      }}
+                      dangerouslySetInnerHTML={{
+                        __html: restaurant.mapIframe!
+                          .replace(/width="[^"]*"/g, 'width="100%"')
+                          .replace(/height="[^"]*"/g, 'height="100%"')
+                      }}
+                    />
+                  ) : hasCoords ? (
+                    <iframe
+                      src={`https://maps.google.com/maps?q=${restaurant.mapLatitude},${restaurant.mapLongitude}&z=16&output=embed`}
+                      width="100%"
+                      height="190"
+                      style={{
+                        border: "1px solid var(--border-light)",
+                        borderRadius: "12px",
+                        display: "block",
+                        boxShadow: "0 2px 8px rgba(0,0,0,0.05)"
+                      }}
+                      allowFullScreen
+                      loading="lazy"
+                      title="Ubicación del Local"
+                    />
+                  ) : null}
+
+                  {directMapUrl && (
+                    <a
+                      href={directMapUrl}
+                      target="_blank"
+                      rel="noopener noreferrer"
+                      className="secondary-btn"
+                      style={{
+                        display: "flex",
+                        alignItems: "center",
+                        justifyContent: "center",
+                        gap: "6px",
+                        width: "100%",
+                        padding: "8px 12px",
+                        fontSize: "12px",
+                        marginTop: "8px",
+                        textDecoration: "none",
+                        borderRadius: "8px"
+                      }}
+                    >
+                      <MapPin size={13} />
+                      Abrir en Google Maps
+                    </a>
+                  )}
                 </div>
-              ) : null
-            )}
+              );
+            })()}
+
+            {/* Soporte y Atención al Cliente Button */}
+            <div style={{ borderTop: "1px solid var(--border-light)", paddingTop: "14px", marginTop: "6px" }}>
+              <button
+                type="button"
+                onClick={() => setSupportModalOpen(true)}
+                style={{
+                  width: "100%",
+                  padding: "10px 14px",
+                  borderRadius: "10px",
+                  backgroundColor: "rgba(59, 130, 246, 0.08)",
+                  border: "1px solid rgba(59, 130, 246, 0.25)",
+                  color: "#2563eb",
+                  fontWeight: "600",
+                  fontSize: "13px",
+                  cursor: "pointer",
+                  display: "flex",
+                  alignItems: "center",
+                  justifyContent: "center",
+                  gap: "8px",
+                  transition: "all 0.2s"
+                }}
+              >
+                <HelpCircle size={16} />
+                ¿Necesitas Ayuda? Soporte GoEats
+              </button>
+            </div>
           </div>
         </aside>
 
       </div>
 
-      {/* FAQs Section */}
-      <div style={{ maxWidth: "1200px", margin: "40px auto 80px auto", padding: "0 20px" }}>
-        <h2 style={{ 
-          fontSize: "1.8rem", 
-          fontWeight: "800",
-          color: "#202124",
-          marginBottom: "25px", 
-          borderBottom: "1px solid var(--border-light)", 
-          paddingBottom: "12px",
-          display: "flex",
-          alignItems: "center",
-          gap: "10px"
-        }}>
-          Preguntas Frecuentes
-        </h2>
-        
-        <div style={{ display: "flex", flexDirection: "column", gap: "12px" }}>
-          {(() => {
-            const getFaqs = () => {
-              if (restaurant.faqsJson) {
-                try {
-                  const parsed = JSON.parse(restaurant.faqsJson);
-                  if (Array.isArray(parsed) && parsed.length > 0) {
-                    return parsed;
-                  }
-                } catch (e) {
-                  console.error("Error parsing FAQs JSON", e);
-                }
-              }
-              return [
-                {
-                  question: "¿Qué tipo de verde utilizan para los bolones?",
-                  answer: "Utilizamos plátano verde dominico de primera calidad, cocinado en su punto y majado artesanalmente para lograr la textura crocante por fuera y suave por dentro que nos caracteriza."
-                },
-                {
-                  question: "¿Los bolones vienen con café incluido?",
-                  answer: "¡Por supuesto! Todos nuestros bolones en combo vienen acompañados de una taza de café negro caliente filtrado al momento."
-                },
-                {
-                  question: "¿Cuál es el tiempo aproximado de entrega a domicilio?",
-                  answer: "El tiempo aproximado es de 30 a 45 minutos, dependiendo de la distancia del reparto y el volumen de pedidos en la cocina."
-                },
-                {
-                  question: "¿Hacen entregas en días feriados?",
-                  answer: "Sí, abrimos todos los días del año, incluyendo feriados, en nuestros horarios habituales para que nunca te quedes con las ganas de un buen bolón."
-                }
-              ];
-            };
+      {/* FAQs Section - Solo se muestra si el dueño del restaurante configuró preguntas frecuentes */}
+      {(() => {
+        let parsedFaqs: Array<{ question: string; answer: string }> = [];
+        if (restaurant.faqsJson) {
+          try {
+            const parsed = JSON.parse(restaurant.faqsJson);
+            if (Array.isArray(parsed) && parsed.length > 0) {
+              parsedFaqs = parsed.filter((f: any) => f && f.question && f.question.trim());
+            }
+          } catch (e) {
+            console.error("Error parsing FAQs JSON", e);
+          }
+        }
+        if (parsedFaqs.length === 0) return null;
 
-            const parsedFaqs = getFaqs();
-            return parsedFaqs.map((faq: any, index: number) => {
-              const isOpen = openFaqIndex === index;
-              return (
-                <div 
-                  key={index} 
-                  style={{
-                    border: "1px solid var(--border-light)",
-                    borderRadius: "var(--radius-md)",
-                    backgroundColor: "#ffffff",
-                    overflow: "hidden",
-                    transition: "all var(--transition-fast)"
-                  }}
-                >
-                  <button
-                    type="button"
-                    onClick={() => setOpenFaqIndex(isOpen ? null : index)}
+        return (
+          <div style={{ maxWidth: "1200px", margin: "40px auto 80px auto", padding: "0 20px" }}>
+            <h2 style={{ 
+              fontSize: "1.8rem", 
+              fontWeight: "800",
+              color: "#202124",
+              marginBottom: "25px", 
+              borderBottom: "1px solid var(--border-light)", 
+              paddingBottom: "12px",
+              display: "flex",
+              alignItems: "center",
+              gap: "10px"
+            }}>
+              Preguntas Frecuentes
+            </h2>
+            
+            <div style={{ display: "flex", flexDirection: "column", gap: "12px" }}>
+              {parsedFaqs.map((faq: any, index: number) => {
+                const isOpen = openFaqIndex === index;
+                return (
+                  <div 
+                    key={index} 
                     style={{
-                      width: "100%",
-                      display: "flex",
-                      justifyContent: "space-between",
-                      alignItems: "center",
-                      padding: "20px 25px",
-                      background: "none",
-                      border: "none",
-                      textAlign: "left",
-                      cursor: "pointer",
-                      fontSize: "1.05rem",
-                      fontWeight: "700",
-                      color: "#202124"
+                      border: "1px solid var(--border-light)",
+                      borderRadius: "var(--radius-md)",
+                      backgroundColor: "#ffffff",
+                      overflow: "hidden",
+                      transition: "all var(--transition-fast)"
                     }}
                   >
-                    <span>{faq.question}</span>
-                    <span style={{ 
-                      fontSize: "1.3rem", 
-                      fontWeight: "400",
-                      color: "var(--accent-primary)",
-                      transform: isOpen ? "rotate(45deg)" : "none",
-                      transition: "transform var(--transition-fast)"
-                    }}>
-                      ＋
-                    </span>
-                  </button>
-                  
-                  {isOpen && (
-                    <div style={{
-                      padding: "0 25px 20px 25px",
-                      fontSize: "0.95rem",
-                      lineHeight: "1.6",
-                      color: "var(--text-secondary)"
-                    }}>
-                      {faq.answer}
-                    </div>
-                  )}
-                </div>
-              );
-            });
-          })()}
-        </div>
-      </div>
+                    <button
+                      type="button"
+                      onClick={() => setOpenFaqIndex(isOpen ? null : index)}
+                      style={{
+                        width: "100%",
+                        display: "flex",
+                        justifyContent: "space-between",
+                        alignItems: "center",
+                        padding: "20px 25px",
+                        background: "none",
+                        border: "none",
+                        textAlign: "left",
+                        cursor: "pointer",
+                        fontSize: "1.05rem",
+                        fontWeight: "700",
+                        color: "#202124"
+                      }}
+                    >
+                      <span>{faq.question}</span>
+                      <span style={{ 
+                        fontSize: "1.3rem", 
+                        fontWeight: "400",
+                        color: "var(--accent-primary)",
+                        transform: isOpen ? "rotate(45deg)" : "none",
+                        transition: "transform var(--transition-fast)"
+                      }}>
+                        ＋
+                      </span>
+                    </button>
+                    
+                    {isOpen && (
+                      <div style={{
+                        padding: "0 25px 20px 25px",
+                        fontSize: "0.95rem",
+                        lineHeight: "1.6",
+                        color: "var(--text-secondary)"
+                      }}>
+                        {faq.answer}
+                      </div>
+                    )}
+                  </div>
+                );
+              })}
+            </div>
+          </div>
+        );
+      })()}
 
       {/* Payphone Simulator Modal */}
       {showPayphoneSimulator && (
@@ -1662,6 +1829,14 @@ export const PublicCatalog: React.FC = () => {
           </button>
         </div>
       )}
+
+      {/* Support & Help Center Modal */}
+      <SupportModal
+        isOpen={supportModalOpen}
+        onClose={() => setSupportModalOpen(false)}
+        defaultRole="CUSTOMER"
+        restaurantName={restaurant.name}
+      />
     </div>
   );
 };

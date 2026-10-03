@@ -5,13 +5,53 @@ import { prisma } from "../../config/database";
 function getLocalIpAddress(): string {
   try {
     const interfaces = os.networkInterfaces();
+    const candidateIps: { ip: string; priority: number }[] = [];
+
     for (const name of Object.keys(interfaces)) {
+      const lowerName = name.toLowerCase();
+      // Skip virtual / internal / container adapters
+      const isVirtual =
+        lowerName.includes("virtual") ||
+        lowerName.includes("vbox") ||
+        lowerName.includes("vmware") ||
+        lowerName.includes("loopback") ||
+        lowerName.includes("pseudo") ||
+        lowerName.includes("vethernet") ||
+        lowerName.includes("tap") ||
+        lowerName.includes("tun") ||
+        lowerName.includes("docker") ||
+        lowerName.includes("wsl");
+
       for (const net of interfaces[name] || []) {
-        // Look for non-internal IPv4 address (e.g. 192.168.x.x, 10.x.x.x)
-        if (net.family === "IPv4" && !net.internal && !net.address.startsWith("169.254")) {
-          return net.address;
+        if (net.family === "IPv4" && !net.internal) {
+          // Exclude APIPA (169.254.x.x) and VirtualBox default host-only (192.168.56.x)
+          if (net.address.startsWith("169.254.") || net.address.startsWith("192.168.56.")) {
+            continue;
+          }
+
+          let priority = 1;
+          // Priority to Wi-Fi / WLAN interfaces
+          if (
+            lowerName.includes("wi-fi") ||
+            lowerName.includes("wifi") ||
+            lowerName.includes("wlan") ||
+            lowerName.includes("wireless")
+          ) {
+            priority = 10;
+          } else if (lowerName.includes("ethernet") && !isVirtual) {
+            priority = 5;
+          } else if (isVirtual) {
+            priority = 0;
+          }
+
+          candidateIps.push({ ip: net.address, priority });
         }
       }
+    }
+
+    if (candidateIps.length > 0) {
+      candidateIps.sort((a, b) => b.priority - a.priority);
+      return candidateIps[0].ip;
     }
   } catch (e) {
     // fallback

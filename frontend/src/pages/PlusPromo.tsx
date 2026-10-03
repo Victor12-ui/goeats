@@ -271,9 +271,9 @@ export const PlusPromo: React.FC = () => {
           <Sparkles size={14} /> CLUB EXCLUSIVO GOEATS
         </div>
         <h1 style={{ 
-          fontSize: "52px", 
+          fontSize: "clamp(28px, 6vw, 52px)", 
           fontWeight: 900, 
-          lineHeight: "1.1", 
+          lineHeight: "1.15", 
           margin: "0 0 20px 0",
           background: "linear-gradient(135deg, var(--text-primary) 0%, #d97706 100%)",
           WebkitBackgroundClip: "text",
@@ -282,7 +282,7 @@ export const PlusPromo: React.FC = () => {
           Tus comidas favoritas, con envíos gratis e ilimitados.
         </h1>
         <p style={{ 
-          fontSize: "18px", 
+          fontSize: "clamp(15px, 3.5vw, 18px)", 
           color: "var(--text-secondary)", 
           lineHeight: "1.6", 
           margin: "0 auto 35px auto",
@@ -317,8 +317,8 @@ export const PlusPromo: React.FC = () => {
         margin: "40px auto 80px auto", 
         padding: "0 20px",
         display: "grid",
-        gridTemplateColumns: "repeat(auto-fit, minmax(300px, 1fr))",
-        gap: "30px"
+        gridTemplateColumns: "repeat(auto-fit, minmax(min(100%, 280px), 1fr))",
+        gap: "24px"
       }}>
         {/* Benefit 1 */}
         <div style={{ 
@@ -385,13 +385,13 @@ export const PlusPromo: React.FC = () => {
         borderTop: "1px solid var(--border-light)"
       }}>
         <div style={{ maxWidth: "1100px", margin: "0 auto", textAlign: "center" }}>
-          <h2 style={{ fontSize: "36px", fontWeight: 800, margin: "0 0 10px 0", color: "var(--text-primary)" }}>Planes Flexibles para Todos</h2>
-          <p style={{ color: "var(--text-secondary)", margin: "0 0 50px 0" }}>Elige la suscripción que mejor se adapte a tus necesidades de consumo.</p>
+          <h2 style={{ fontSize: "clamp(24px, 5vw, 36px)", fontWeight: 800, margin: "0 0 10px 0", color: "var(--text-primary)" }}>Planes Flexibles para Todos</h2>
+          <p style={{ color: "var(--text-secondary)", margin: "0 0 40px 0", fontSize: "14px" }}>Elige la suscripción que mejor se adapte a tus necesidades de consumo.</p>
 
           <div style={{ 
             display: "grid", 
-            gridTemplateColumns: "repeat(auto-fit, minmax(280px, 1fr))", 
-            gap: "30px",
+            gridTemplateColumns: "repeat(auto-fit, minmax(min(100%, 260px), 1fr))", 
+            gap: "24px",
             alignItems: "stretch"
           }}>
             {loadingPlans ? (

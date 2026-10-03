@@ -14,6 +14,7 @@ import {
   createSaaSPlan,
   updateSaaSPlan,
   deleteSaaSPlan,
+  deleteCustomer,
 } from "./saas.controller";
 
 const router = Router();
@@ -39,5 +40,6 @@ router.post("/orders/:id/approve", authorize([Role.SUPER_ADMIN]), approveSaaSOrd
 router.post("/orders/:id/reject", authorize([Role.SUPER_ADMIN]), rejectSaaSOrder);
 router.get("/customers", authorize([Role.SUPER_ADMIN]), getCustomers);
 router.post("/customers/:id/toggle-plus", authorize([Role.SUPER_ADMIN]), toggleCustomerPlus);
+router.delete("/customers/:id", authorize([Role.SUPER_ADMIN]), deleteCustomer);
 
 export default router;

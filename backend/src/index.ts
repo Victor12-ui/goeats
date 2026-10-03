@@ -1,3 +1,6 @@
+import dotenv from "dotenv";
+dotenv.config({ override: true });
+
 import express from "express";
 import http from "http";
 import { Server } from "socket.io";
@@ -75,6 +78,7 @@ import deliveryRouter from "./modules/delivery/delivery.routes";
 import saasRouter from "./modules/saas/saas.routes";
 import saasCategoriesRouter from "./modules/saas-categories/saas-categories.routes";
 import notificationsRouter from "./modules/notifications/notification.routes";
+import supportRouter from "./modules/support/support.routes";
 
 // API routes
 app.use("/api/auth", authRouter);
@@ -94,6 +98,7 @@ app.use("/api/delivery", deliveryRouter);
 app.use("/api/saas", saasRouter);
 app.use("/api/saas-categories", saasCategoriesRouter);
 app.use("/api/notifications", notificationsRouter);
+app.use("/api/support", supportRouter);
 
 
 // Global Error Handler

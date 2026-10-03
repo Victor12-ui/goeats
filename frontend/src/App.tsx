@@ -18,7 +18,8 @@ import { PlusPromo } from "./pages/PlusPromo";
 import { Orders } from "./pages/Orders";
 import { TablesPage } from "./pages/TablesPage";
 import { KitchenNotificationManager } from "./components/KitchenNotificationManager";
-import { ShoppingBag, ChefHat, Wallet, Settings, TrendingUp, LogOut, Shield, Truck, BookOpen, Menu as MenuIcon, Utensils, ClipboardList } from "lucide-react";
+import { SupportPage } from "./pages/SupportPage";
+import { ShoppingBag, ChefHat, Wallet, Settings, TrendingUp, LogOut, Shield, Truck, BookOpen, Menu as MenuIcon, Utensils, ClipboardList, User, HelpCircle } from "lucide-react";
 
 // Protected Route Guard
 interface ProtectedRouteProps {
@@ -129,6 +130,7 @@ const AppLayout: React.FC<{ children: React.ReactNode }> = ({ children }) => {
       visible: user.role === "SUPER_ADMIN",
       subLinks: [
         { to: "/admin/restaurants?tab=restaurants", label: "Restaurantes (Tenants)" },
+        { to: "/admin/restaurants?tab=approvals", label: "Aprobación de Locales" },
         { to: "/admin/restaurants?tab=saas_categories", label: "Categorías SaaS" },
         { to: "/admin/restaurants?tab=delivery", label: "Configuración de Tarifas" },
         { to: "/admin/restaurants?tab=wallet", label: "Wallet Conductores" },
@@ -149,6 +151,18 @@ const AppLayout: React.FC<{ children: React.ReactNode }> = ({ children }) => {
       label: "Mis Pedidos",
       icon: ShoppingBag,
       visible: user.role === "CUSTOMER",
+    },
+    {
+      to: "/customer/profile",
+      label: "Mi Perfil",
+      icon: User,
+      visible: user.role === "CUSTOMER",
+    },
+    {
+      to: "/support",
+      label: "Ayuda & Soporte",
+      icon: HelpCircle,
+      visible: true,
     },
   ];
 
@@ -339,6 +353,7 @@ function App() {
             <Route path="/qr/:slug" element={<PublicCatalog />} />
             <Route path="/login" element={<Auth />} />
             <Route path="/plus" element={<PlusPromo />} />
+            <Route path="/support" element={<SupportPage />} />
 
             {/* Protected POS / Admin Routes */}
             <Route path="/pos" element={
@@ -415,6 +430,13 @@ function App() {
               <ProtectedRoute allowedRoles={["CUSTOMER"]}>
                 <AppLayout>
                   <CustomerDashboard />
+                </AppLayout>
+              </ProtectedRoute>
+            } />
+            <Route path="/customer/profile" element={
+              <ProtectedRoute allowedRoles={["CUSTOMER"]}>
+                <AppLayout>
+                  <CustomerDashboard defaultTab="profile" />
                 </AppLayout>
               </ProtectedRoute>
             } />

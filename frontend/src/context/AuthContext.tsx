@@ -6,11 +6,17 @@ export interface User {
   id: number;
   username: string;
   name: string;
+  email?: string | null;
+  phone?: string | null;
+  cedula?: string | null;
   role: Role;
   restaurantId: number | null;
   restaurantName?: string | null;
   restaurantSlug?: string | null;
   isPlus?: boolean;
+  walletBalance?: number;
+  createdAt?: string;
+  preferences?: string[];
 }
 
 interface AuthContextType {
@@ -18,6 +24,7 @@ interface AuthContextType {
   user: User | null;
   login: (token: string, user: User) => void;
   logout: () => void;
+  updateUser: (updatedFields: Partial<User>) => void;
   isAuthenticated: boolean;
 }
 
@@ -52,10 +59,19 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
     setUser(null);
   };
 
+  const updateUser = (updatedFields: Partial<User>) => {
+    setUser(prev => {
+      if (!prev) return null;
+      const updated = { ...prev, ...updatedFields };
+      localStorage.setItem("goeats_user", JSON.stringify(updated));
+      return updated;
+    });
+  };
+
   const isAuthenticated = !!token;
 
   return (
-    <AuthContext.Provider value={{ token, user, login, logout, isAuthenticated }}>
+    <AuthContext.Provider value={{ token, user, login, logout, updateUser, isAuthenticated }}>
       {children}
     </AuthContext.Provider>
   );

@@ -482,74 +482,77 @@ export const Auth: React.FC = () => {
               </p>
             </div>
 
-            {/* CARD 4: SUPERADMIN */}
-            <div
+          </div>
+          
+          <div style={{
+            display: "flex",
+            alignItems: "center",
+            justifyContent: "center",
+            gap: "14px",
+            flexWrap: "wrap",
+            marginTop: "10px"
+          }}>
+            <button
+              onClick={() => navigate("/")}
+              style={{
+                padding: "10px 22px",
+                borderRadius: "30px",
+                backgroundColor: "#ffffff",
+                border: "1px solid var(--border-light)",
+                color: "var(--text-secondary)",
+                fontWeight: "600",
+                cursor: "pointer",
+                fontSize: "14px",
+                boxShadow: "var(--shadow-sm)",
+                transition: "all var(--transition-fast)"
+              }}
+              onMouseEnter={(e) => {
+                e.currentTarget.style.backgroundColor = "var(--bg-secondary)";
+                e.currentTarget.style.color = "var(--text-primary)";
+              }}
+              onMouseLeave={(e) => {
+                e.currentTarget.style.backgroundColor = "#ffffff";
+                e.currentTarget.style.color = "var(--text-secondary)";
+              }}
+            >
+              Volver a la Página Principal
+            </button>
+
+            <button
               onClick={() => {
                 setSelectedRole("superadmin");
                 setIsLogin(true);
               }}
               style={{
-                backgroundColor: "#ffffff",
-                padding: "40px 30px",
-                borderRadius: "var(--radius-lg)",
+                padding: "10px 20px",
+                borderRadius: "30px",
+                backgroundColor: "rgba(139, 92, 246, 0.08)",
+                border: "1px solid rgba(139, 92, 246, 0.25)",
+                color: "#7c3aed",
+                fontWeight: "600",
                 cursor: "pointer",
-                textAlign: "center",
-                transition: "all var(--transition-fast)",
-                border: "1px solid var(--border-light)",
-                boxShadow: "var(--shadow-sm)",
-                display: "flex",
-                flexDirection: "column",
+                fontSize: "13px",
+                display: "inline-flex",
                 alignItems: "center",
-                gap: "15px"
+                gap: "7px",
+                transition: "all var(--transition-fast)",
+                boxShadow: "var(--shadow-sm)"
               }}
               onMouseEnter={(e) => {
-                e.currentTarget.style.transform = "translateY(-5px)";
-                e.currentTarget.style.boxShadow = "var(--shadow-lg)";
-                e.currentTarget.style.borderColor = "#8b5cf6";
+                e.currentTarget.style.backgroundColor = "#7c3aed";
+                e.currentTarget.style.color = "#ffffff";
+                e.currentTarget.style.boxShadow = "0 4px 12px rgba(124, 58, 237, 0.3)";
               }}
               onMouseLeave={(e) => {
-                e.currentTarget.style.transform = "translateY(0)";
+                e.currentTarget.style.backgroundColor = "rgba(139, 92, 246, 0.08)";
+                e.currentTarget.style.color = "#7c3aed";
                 e.currentTarget.style.boxShadow = "var(--shadow-sm)";
-                e.currentTarget.style.borderColor = "var(--border-light)";
               }}
             >
-              <div style={{
-                width: "60px",
-                height: "60px",
-                borderRadius: "50%",
-                backgroundColor: "rgba(139, 92, 246, 0.1)",
-                display: "flex",
-                alignItems: "center",
-                justifyContent: "center",
-                color: "#8b5cf6"
-              }}>
-                <Shield size={28} />
-              </div>
-              <h2 style={{ fontSize: "20px", fontWeight: "700", color: "var(--text-primary)", margin: 0 }}>
-                Super Administrador
-              </h2>
-              <p style={{ fontSize: "13px", color: "var(--text-secondary)", margin: 0, lineHeight: "1.4" }}>
-                Gestión global de la plataforma SaaS, locales, comisiones y configuración.
-              </p>
-            </div>
-
+              <Shield size={15} />
+              Acceso SuperAdmin
+            </button>
           </div>
-          
-          <button
-            onClick={() => navigate("/")}
-            style={{
-              padding: "10px 20px",
-              borderRadius: "30px",
-              backgroundColor: "transparent",
-              border: "1px solid var(--border-light)",
-              color: "var(--text-secondary)",
-              fontWeight: "600",
-              cursor: "pointer",
-              fontSize: "14px"
-            }}
-          >
-            Volver a la Página Principal
-          </button>
         </div>
       ) : (
         <div className="glass-card animate-fade-in mobile-p-md mobile-full-width" style={{

@@ -2,7 +2,7 @@ import React, { useEffect, useState } from "react";
 import { createPortal } from "react-dom";
 import { useAuth } from "../context/AuthContext";
 import { apiRequest } from "../utils/api";
-import { Link, useNavigate } from "react-router-dom";
+import { Link, useNavigate, useSearchParams } from "react-router-dom";
 import { 
   ShoppingBag, 
   TrendingUp, 
@@ -15,10 +15,14 @@ import {
   MapPin, 
   X,
   CheckCircle,
-  Sparkles
+  Sparkles,
+  User as UserIcon,
+  HelpCircle
 } from "lucide-react";
 import { RouteMap } from "../components/RouteMap";
 import { FoodPreferencesModal } from "../components/FoodPreferencesModal";
+import { CustomerProfileView } from "../components/CustomerProfileView";
+import { SupportModal } from "../components/SupportModal";
 
 interface OrderItem {
   id: number;
@@ -78,9 +82,30 @@ interface CustomerStats {
   favoriteRestaurant: string;
 }
 
-export const CustomerDashboard: React.FC = () => {
+interface CustomerDashboardProps {
+  defaultTab?: "orders" | "profile";
+}
+
+export const CustomerDashboard: React.FC<CustomerDashboardProps> = ({ defaultTab = "orders" }) => {
   const { user, token, login } = useAuth();
   const navigate = useNavigate();
+  const [searchParams, setSearchParams] = useSearchParams();
+
+  const tabFromUrl = searchParams.get("tab") as "orders" | "profile" | null;
+  const [activeTab, setActiveTab] = useState<"orders" | "profile">(
+    tabFromUrl === "profile" || tabFromUrl === "orders" ? tabFromUrl : defaultTab
+  );
+
+  useEffect(() => {
+    if (tabFromUrl && (tabFromUrl === "orders" || tabFromUrl === "profile")) {
+      setActiveTab(tabFromUrl);
+    }
+  }, [tabFromUrl]);
+
+  const handleTabChange = (tab: "orders" | "profile") => {
+    setActiveTab(tab);
+    setSearchParams({ tab });
+  };
 
   const [orders, setOrders] = useState<Order[]>([]);
   const [stats, setStats] = useState<CustomerStats>({
@@ -96,6 +121,8 @@ export const CustomerDashboard: React.FC = () => {
   const [trackingOrder, setTrackingOrder] = useState<Order | null>(null);
   const [isModalOpen, setIsModalOpen] = useState(false);
   const [preferencesModalOpen, setPreferencesModalOpen] = useState(false);
+  const [isSupportOpen, setIsSupportOpen] = useState(false);
+  const [supportOrder, setSupportOrder] = useState<Order | null>(null);
 
   // SaaS Subscription States
   const [plans, setPlans] = useState<any[]>([]);
@@ -389,32 +416,33 @@ export const CustomerDashboard: React.FC = () => {
   }
 
   return (
-    <div style={{ maxWidth: "1000px", margin: "30px auto", padding: "0 20px" }} className="animate-fade-in">
+    <div style={{ maxWidth: "1000px", margin: "20px auto 40px auto", padding: "0 16px" }} className="customer-dashboard-container animate-fade-in">
       {/* Header / Back */}
-      <div style={{ display: "flex", alignItems: "center", gap: "10px", marginBottom: "20px" }}>
-        <Link to="/" style={{ display: "flex", alignItems: "center", gap: "4px", color: "var(--text-secondary)", fontSize: "14px", textDecoration: "none" }}>
+      <div style={{ display: "flex", alignItems: "center", gap: "10px", marginBottom: "16px" }}>
+        <Link to="/" style={{ display: "flex", alignItems: "center", gap: "6px", color: "var(--text-secondary)", fontSize: "13.5px", fontWeight: 600, textDecoration: "none" }}>
           <ArrowLeft size={16} />
           Volver a Restaurantes
         </Link>
       </div>
 
-      <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: "30px", flexWrap: "wrap", gap: "14px" }}>
+      <div className="customer-dashboard-header" style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: "24px", flexWrap: "wrap", gap: "14px" }}>
         <div>
-          <h1 style={{ fontSize: "28px", fontWeight: 800, color: "var(--text-primary)", margin: 0 }}>
+          <h1 style={{ fontSize: "clamp(22px, 5vw, 28px)", fontWeight: 800, color: "var(--text-primary)", margin: 0, letterSpacing: "-0.5px" }}>
             Hola, {user?.name} 👋
           </h1>
-          <p style={{ color: "var(--text-secondary)", margin: "4px 0 0 0" }}>
+          <p style={{ color: "var(--text-secondary)", margin: "4px 0 0 0", fontSize: "14px" }}>
             Administra tus pedidos, revisa estadísticas y gestiona tu Club GoEats Plus.
           </p>
         </div>
 
         <button
           onClick={() => setPreferencesModalOpen(true)}
+          className="customer-dashboard-pref-btn"
           style={{
-            display: "flex",
+            display: "inline-flex",
             alignItems: "center",
             gap: "8px",
-            padding: "10px 18px",
+            padding: "9px 18px",
             backgroundColor: "#ffffff",
             border: "1px solid rgba(255, 71, 87, 0.3)",
             borderRadius: "30px",
@@ -423,21 +451,78 @@ export const CustomerDashboard: React.FC = () => {
             fontSize: "13px",
             cursor: "pointer",
             boxShadow: "0 2px 6px rgba(255, 71, 87, 0.08)",
-            transition: "all 0.2s ease"
+            transition: "all 0.2s ease",
+            whiteSpace: "nowrap"
           }}
         >
-          <Sparkles size={16} />
+          <Sparkles size={15} />
           Mis Preferencias Gastronómicas
         </button>
       </div>
 
-      {error && (
-        <div style={{ padding: "12px 16px", backgroundColor: "#fef2f2", border: "1px solid #fee2e2", color: "#dc2626", borderRadius: "var(--radius-sm)", marginBottom: "20px", fontSize: "14px" }}>
-          {error}
-        </div>
-      )}
+      {/* Tabs Navigation */}
+      <div className="customer-dashboard-tabs no-scrollbar">
+        <button
+          type="button"
+          onClick={() => handleTabChange("orders")}
+          className="customer-tab-btn"
+          style={{
+            border: "none",
+            backgroundColor: activeTab === "orders" ? "#ff4757" : "#f1f5f9",
+            color: activeTab === "orders" ? "#ffffff" : "#475569",
+            boxShadow: activeTab === "orders" ? "0 4px 12px rgba(255, 71, 87, 0.25)" : "none",
+          }}
+        >
+          <ShoppingBag size={16} />
+          <span>Mis Pedidos ({orders.length})</span>
+        </button>
 
-      {/* Subscription Card GoEats Plus - Active */}
+        <button
+          type="button"
+          onClick={() => handleTabChange("profile")}
+          className="customer-tab-btn"
+          style={{
+            border: "none",
+            backgroundColor: activeTab === "profile" ? "#ff4757" : "#f1f5f9",
+            color: activeTab === "profile" ? "#ffffff" : "#475569",
+            boxShadow: activeTab === "profile" ? "0 4px 12px rgba(255, 71, 87, 0.25)" : "none",
+          }}
+        >
+          <UserIcon size={16} />
+          <span>Mi Perfil</span>
+        </button>
+
+        <button
+          type="button"
+          onClick={() => {
+            setSupportOrder(null);
+            setIsSupportOpen(true);
+          }}
+          className="customer-tab-btn"
+          style={{
+            border: "1px solid #cbd5e1",
+            backgroundColor: "#ffffff",
+            color: "#2563eb",
+          }}
+        >
+          <HelpCircle size={16} />
+          <span>Centro de Ayuda</span>
+        </button>
+      </div>
+
+
+
+      {activeTab === "profile" ? (
+        <CustomerProfileView />
+      ) : (
+        <>
+          {error && (
+            <div style={{ padding: "12px 16px", backgroundColor: "#fef2f2", border: "1px solid #fee2e2", color: "#dc2626", borderRadius: "var(--radius-sm)", marginBottom: "20px", fontSize: "14px" }}>
+              {error}
+            </div>
+          )}
+
+          {/* Subscription Card GoEats Plus - Active */}
       {user?.isPlus ? (
         <div style={{
           background: "linear-gradient(135deg, #fffbeb 0%, #fef3c7 100%)",
@@ -785,9 +870,9 @@ export const CustomerDashboard: React.FC = () => {
       {/* Stats Cards Row */}
       <div style={{
         display: "grid",
-        gridTemplateColumns: "repeat(auto-fit, minmax(280px, 1fr))",
-        gap: "20px",
-        marginBottom: "35px"
+        gridTemplateColumns: "repeat(auto-fit, minmax(min(100%, 220px), 1fr))",
+        gap: "14px",
+        marginBottom: "30px"
       }}>
         {/* Metric 1 */}
         <div style={{
@@ -996,6 +1081,31 @@ export const CustomerDashboard: React.FC = () => {
                           Pedir de Nuevo 🔁
                         </button>
                       )}
+
+                      <button
+                        type="button"
+                        onClick={() => {
+                          setSupportOrder(order);
+                          setIsSupportOpen(true);
+                        }}
+                        style={{
+                          backgroundColor: "#f8fafc",
+                          color: "#475569",
+                          border: "1px solid #cbd5e1",
+                          padding: "6px 12px",
+                          borderRadius: "4px",
+                          fontSize: "12px",
+                          fontWeight: 600,
+                          cursor: "pointer",
+                          display: "flex",
+                          alignItems: "center",
+                          gap: "4px"
+                        }}
+                        title="Reportar problema o solicitar asistencia con esta orden"
+                      >
+                        <HelpCircle size={13} color="#3b82f6" />
+                        Ayuda
+                      </button>
                     </div>
                   </div>
                 </div>
@@ -1242,11 +1352,25 @@ export const CustomerDashboard: React.FC = () => {
         </div>,
         document.body
       )}
+        </>
+      )}
 
       {/* Culinary Preferences Modal */}
       <FoodPreferencesModal
         isOpen={preferencesModalOpen}
         onClose={() => setPreferencesModalOpen(false)}
+      />
+
+      {/* Support & Help Center Modal */}
+      <SupportModal
+        isOpen={isSupportOpen}
+        onClose={() => {
+          setIsSupportOpen(false);
+          setSupportOrder(null);
+        }}
+        defaultRole="CUSTOMER"
+        orderId={supportOrder ? supportOrder.id : undefined}
+        restaurantName={supportOrder ? supportOrder.restaurant.name : undefined}
       />
     </div>
   );

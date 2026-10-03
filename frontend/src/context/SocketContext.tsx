@@ -25,8 +25,23 @@ export const SocketProvider: React.FC<{ children: React.ReactNode }> = ({ childr
     }
 
     const envSocketUrl = (import.meta as any).env?.VITE_SOCKET_URL;
-    const hostname = typeof window !== "undefined" && window.location.hostname ? window.location.hostname : "localhost";
-    const socketUrl = envSocketUrl ? envSocketUrl.replace(/\/$/, "") : `http://${hostname}:5000`;
+    let socketUrl = "http://localhost:5000";
+    if (typeof window !== "undefined" && window.location) {
+      const { hostname, protocol } = window.location;
+      if (hostname && hostname !== "localhost" && hostname !== "127.0.0.1") {
+        socketUrl = `${protocol}//${hostname}:5000`;
+      }
+    }
+    if (envSocketUrl) {
+      try {
+        const parsed = new URL(envSocketUrl);
+        if (parsed.hostname !== "localhost" && parsed.hostname !== "127.0.0.1") {
+          socketUrl = envSocketUrl.replace(/\/$/, "");
+        }
+      } catch {
+        socketUrl = envSocketUrl.replace(/\/$/, "");
+      }
+    }
     const newSocket = io(socketUrl, {
       transports: ["websocket", "polling"],
       autoConnect: true,

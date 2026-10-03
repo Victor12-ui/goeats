@@ -74,25 +74,26 @@ export class NotificationService {
       }),
     });
 
-    const tokenData = await tokenRes.json();
-    if (!tokenData.access_token) {
-      throw new Error(`Fallo de autorización OAuth2 con Gmail: ${tokenData.error_description || tokenData.error || "No se obtuvo token"}`);
+    const tokenData = (await tokenRes.json()) as any;
+    if (!tokenData?.access_token) {
+      throw new Error(`Fallo de autorización OAuth2 con Gmail: ${tokenData?.error_description || tokenData?.error || "No se obtuvo token"}`);
     }
 
-    // 2. Construir mensaje RFC 2822 con codificación UTF-8
-    const utf8Subject = `=?utf-8?B?${Buffer.from(params.subject).toString("base64")}?=`;
-    const messageLines = [
-      `From: Go Eats <${params.from}>`,
-      `To: ${params.to}`,
-      `Subject: ${utf8Subject}`,
-      "MIME-Version: 1.0",
-      "Content-Type: text/html; charset=utf-8",
-      "",
-      params.html,
-    ];
+    // 2. Construir mensaje RFC 2822 completo (multipart/alternative, Message-ID, Date y text fallback para anti-spam)
+    // @ts-ignore
+    const MailComposer = require("nodemailer/lib/mail-composer");
+    const textFallback = params.html.replace(/<[^>]+>/g, " ").replace(/\s+/g, " ").trim();
 
-    const rawMessage = messageLines.join("\r\n");
-    const base64UrlEncoded = Buffer.from(rawMessage)
+    const mail = new MailComposer({
+      from: `"Go Eats" <${params.from}>`,
+      to: params.to,
+      subject: params.subject,
+      text: textFallback,
+      html: params.html,
+    });
+
+    const compiledBuffer: Buffer = await mail.compile().build();
+    const base64UrlEncoded = compiledBuffer
       .toString("base64")
       .replace(/\+/g, "-")
       .replace(/\//g, "_")
@@ -108,8 +109,8 @@ export class NotificationService {
       body: JSON.stringify({ raw: base64UrlEncoded }),
     });
 
-    const sendData = await sendRes.json();
-    if (sendData.error) {
+    const sendData = (await sendRes.json()) as any;
+    if (sendData?.error) {
       throw new Error(`Gmail API error: ${sendData.error.message || JSON.stringify(sendData.error)}`);
     }
 
@@ -219,6 +220,90 @@ export class NotificationService {
         },
       });
 
+      return { success: false, error: err.message || err };
+    }
+  }
+
+  /**
+   * Reintenta el envío de un registro existente de correo directamente actualizando su estado
+   */
+  public static async retryRecord(id: number) {
+    const record = await prisma.emailNotification.findUnique({ where: { id } });
+    if (!record) {
+      return { success: false, error: "Registro no encontrado" };
+    }
+
+    let parsedData: any = {};
+    try {
+      if (record.metadataJson) {
+        parsedData = JSON.parse(record.metadataJson);
+      }
+    } catch (_) {}
+
+    const { subject, html } = renderEmailTemplate(
+      record.type as NotificationEvent,
+      parsedData,
+      parsedData.name || "Usuario"
+    );
+
+    // Marcar como SENDING
+    await prisma.emailNotification.update({
+      where: { id },
+      data: { status: "SENDING", error: null },
+    });
+
+    try {
+      const isGmailOAuthReady = Boolean(
+        env.GMAIL_USER &&
+        env.GMAIL_CLIENT_ID &&
+        env.GMAIL_CLIENT_SECRET &&
+        env.GMAIL_REFRESH_TOKEN
+      );
+
+      let provider = "GMAIL_API_V1";
+      let messageId = "";
+
+      if (isGmailOAuthReady) {
+        const result = await this.sendViaGmailApi({
+          from: env.GMAIL_USER,
+          to: record.recipientEmail,
+          subject,
+          html,
+        });
+        messageId = result.messageId;
+      } else {
+        provider = "SMTP_FALLBACK";
+        const { transporter, senderEmail } = this.getTransporter();
+        const info = await transporter.sendMail({
+          from: `"Go Eats" <${senderEmail}>`,
+          to: record.recipientEmail,
+          subject,
+          html,
+        });
+        messageId = info.messageId || "SMTP_OK";
+      }
+
+      const updated = await prisma.emailNotification.update({
+        where: { id },
+        data: {
+          status: "SENT",
+          providerMessageId: messageId,
+          sentAt: new Date(),
+          error: null,
+        },
+      });
+
+      console.log(`[NotificationService] 📧 Reintento exitoso [ID ${id}] -> ${record.recipientEmail} (${provider})`);
+      return { success: true, notification: updated, provider };
+    } catch (err: any) {
+      console.error(`[NotificationService] ❌ Reintento fallido [ID ${id}]:`, err.message || err);
+      await prisma.emailNotification.update({
+        where: { id },
+        data: {
+          status: "FAILED",
+          error: err.message || String(err),
+        },
+      });
       return { success: false, error: err.message || err };
     }
   }
@@ -439,4 +524,39 @@ export class NotificationService {
       },
     });
   }
+
+  /**
+   * Envía un correo directo HTML (ej. tickets de soporte o alertas administrativas)
+   */
+  public static async sendDirectMail(params: {
+    to: string;
+    subject: string;
+    html: string;
+    fromName?: string;
+  }) {
+    const isGmailOAuthReady = Boolean(
+      env.GMAIL_USER &&
+      env.GMAIL_CLIENT_ID &&
+      env.GMAIL_CLIENT_SECRET &&
+      env.GMAIL_REFRESH_TOKEN
+    );
+
+    if (isGmailOAuthReady) {
+      return this.sendViaGmailApi({
+        from: env.GMAIL_USER,
+        to: params.to,
+        subject: params.subject,
+        html: params.html,
+      });
+    } else {
+      const { transporter, senderEmail } = this.getTransporter();
+      return transporter.sendMail({
+        from: `"${params.fromName || 'GoEats Soporte'}" <${senderEmail}>`,
+        to: params.to,
+        subject: params.subject,
+        html: params.html,
+      });
+    }
+  }
 }
+

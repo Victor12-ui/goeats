@@ -1,6 +1,31 @@
-const envApiUrl = (import.meta as any).env?.VITE_API_URL;
-const hostname = typeof window !== "undefined" && window.location.hostname ? window.location.hostname : "localhost";
-const BASE_URL = envApiUrl ? envApiUrl.replace(/\/$/, "") : `http://${hostname}:5000/api`;
+export function getBaseApiUrl(): string {
+  const envApiUrl = (import.meta as any).env?.VITE_API_URL;
+  if (typeof window !== "undefined" && window.location) {
+    const { hostname, protocol } = window.location;
+
+    // When accessed through LAN IP or domain from mobile phones or other devices
+    if (hostname && hostname !== "localhost" && hostname !== "127.0.0.1") {
+      if (envApiUrl) {
+        try {
+          const parsed = new URL(envApiUrl);
+          // If envApiUrl pointed to localhost, redirect it to current machine's host
+          if (parsed.hostname === "localhost" || parsed.hostname === "127.0.0.1") {
+            parsed.hostname = hostname;
+            return parsed.toString().replace(/\/$/, "");
+          }
+          return envApiUrl.replace(/\/$/, "");
+        } catch {
+          if (envApiUrl.startsWith("/")) {
+            return `${window.location.origin}${envApiUrl.replace(/\/$/, "")}`;
+          }
+        }
+      }
+      return `${protocol}//${hostname}:5000/api`;
+    }
+  }
+
+  return envApiUrl ? envApiUrl.replace(/\/$/, "") : "http://localhost:5000/api";
+}
 
 interface RequestOptions extends RequestInit {
   params?: Record<string, string>;
@@ -34,7 +59,8 @@ export async function apiRequest(endpoint: string, options: RequestOptions = {})
     headers.set("x-restaurant-id", restaurantId);
   }
 
-  let url = `${BASE_URL}${endpoint}`;
+  const baseUrl = getBaseApiUrl();
+  let url = `${baseUrl}${endpoint}`;
   if (options.params) {
     const searchParams = new URLSearchParams(options.params);
     url += `?${searchParams.toString()}`;
