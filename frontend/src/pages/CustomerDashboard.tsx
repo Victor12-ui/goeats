@@ -14,9 +14,11 @@ import {
   Loader2, 
   MapPin, 
   X,
-  CheckCircle
+  CheckCircle,
+  Sparkles
 } from "lucide-react";
 import { RouteMap } from "../components/RouteMap";
+import { FoodPreferencesModal } from "../components/FoodPreferencesModal";
 
 interface OrderItem {
   id: number;
@@ -93,6 +95,7 @@ export const CustomerDashboard: React.FC = () => {
   // Tracking Modal State
   const [trackingOrder, setTrackingOrder] = useState<Order | null>(null);
   const [isModalOpen, setIsModalOpen] = useState(false);
+  const [preferencesModalOpen, setPreferencesModalOpen] = useState(false);
 
   // SaaS Subscription States
   const [plans, setPlans] = useState<any[]>([]);
@@ -395,7 +398,7 @@ export const CustomerDashboard: React.FC = () => {
         </Link>
       </div>
 
-      <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: "30px" }}>
+      <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: "30px", flexWrap: "wrap", gap: "14px" }}>
         <div>
           <h1 style={{ fontSize: "28px", fontWeight: 800, color: "var(--text-primary)", margin: 0 }}>
             Hola, {user?.name} 👋
@@ -404,6 +407,28 @@ export const CustomerDashboard: React.FC = () => {
             Administra tus pedidos, revisa estadísticas y gestiona tu Club GoEats Plus.
           </p>
         </div>
+
+        <button
+          onClick={() => setPreferencesModalOpen(true)}
+          style={{
+            display: "flex",
+            alignItems: "center",
+            gap: "8px",
+            padding: "10px 18px",
+            backgroundColor: "#ffffff",
+            border: "1px solid rgba(255, 71, 87, 0.3)",
+            borderRadius: "30px",
+            color: "#ff4757",
+            fontWeight: 700,
+            fontSize: "13px",
+            cursor: "pointer",
+            boxShadow: "0 2px 6px rgba(255, 71, 87, 0.08)",
+            transition: "all 0.2s ease"
+          }}
+        >
+          <Sparkles size={16} />
+          Mis Preferencias Gastronómicas
+        </button>
       </div>
 
       {error && (
@@ -1217,6 +1242,12 @@ export const CustomerDashboard: React.FC = () => {
         </div>,
         document.body
       )}
+
+      {/* Culinary Preferences Modal */}
+      <FoodPreferencesModal
+        isOpen={preferencesModalOpen}
+        onClose={() => setPreferencesModalOpen(false)}
+      />
     </div>
   );
 };

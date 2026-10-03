@@ -4,6 +4,8 @@ import { OrderType, OrderStatus, OrderItemStatus } from "@prisma/client";
 import jwt from "jsonwebtoken";
 import { env } from "../../config/env";
 import { TokenPayload } from "../../middlewares/auth";
+import { NotificationService } from "../notifications/notification.service";
+
 
 export async function getAllRestaurants(req: Request, res: Response, next: NextFunction) {
   try {
@@ -111,8 +113,47 @@ export async function updateRestaurant(req: Request, res: Response, next: NextFu
         categories: categoryIds ? { set: categoryIds.map((cid: number) => ({ id: cid })) } : undefined,
         subcategories: subcategoryIds ? { set: subcategoryIds.map((sid: number) => ({ id: sid })) } : undefined,
         isActive: req.user?.role === "SUPER_ADMIN" ? isActive : undefined, // Only SuperAdmin can activate/deactivate
+        status: (req.user?.role === "SUPER_ADMIN" && req.body.status) ? req.body.status : undefined,
+      },
+      include: {
+        users: {
+          where: { role: "RESTAURANT_OWNER" },
+          select: { id: true, name: true, email: true },
+        },
       },
     });
+
+    // Notificaciones por cambio de estado del restaurante (Sección 4 y 5 del Plan)
+    if (req.body.status && restaurant.users.length > 0) {
+      const owner = restaurant.users[0];
+      if (owner.email) {
+        if (req.body.status === "APPROVED") {
+          await prisma.user.updateMany({
+            where: { restaurantId: restaurant.id, role: "RESTAURANT_OWNER" },
+            data: { isActive: true },
+          });
+          NotificationService.notifyRestaurantApproved(
+            { id: restaurant.id, name: restaurant.name },
+            { id: owner.id, name: owner.name, email: owner.email }
+          ).catch((e) => console.warn("[Email] Error approved restaurant:", e));
+        } else if (req.body.status === "REJECTED") {
+          await prisma.user.updateMany({
+            where: { restaurantId: restaurant.id, role: "RESTAURANT_OWNER" },
+            data: { isActive: false },
+          });
+          NotificationService.notifyRestaurantRejected(
+            { id: restaurant.id, name: restaurant.name },
+            { id: owner.id, name: owner.name, email: owner.email },
+            req.body.rejectReason
+          ).catch((e) => console.warn("[Email] Error rejected restaurant:", e));
+        } else if (req.body.status === "UNDER_REVIEW") {
+          NotificationService.notifyRestaurantUnderReview(
+            { id: restaurant.id, name: restaurant.name },
+            { id: owner.id, name: owner.name, email: owner.email }
+          ).catch((e) => console.warn("[Email] Error under review restaurant:", e));
+        }
+      }
+    }
 
     return res.status(200).json({
       success: true,
@@ -419,6 +460,35 @@ export async function createPublicOrder(req: Request, res: Response, next: NextF
       io.to(`restaurant-${restaurant.id}`).emit("new-order", order);
       console.log(`[Socket] Emitted public new-order for restaurant-${restaurant.id}`);
     }
+
+    // Disparar notificaciones por correo (Cliente & Restaurante)
+    (async () => {
+      try {
+        // Notificar al cliente si tenemos su email
+        const targetEmail = (customerId ? (await prisma.user.findUnique({ where: { id: customerId }, select: { email: true } }))?.email : null) || req.body.customerEmail;
+        if (targetEmail) {
+          NotificationService.notifyOrderCreated(
+            { id: order.id, total: order.total, deliveryAddress: order.deliveryAddress, restaurant: { name: restaurant.name } },
+            { id: customerId || undefined, name: order.customerName, email: targetEmail }
+          ).catch((e) => console.warn("[Email] Error customer order created:", e));
+        }
+
+        // Notificar al dueño del restaurante
+        const owner = await prisma.user.findFirst({
+          where: { restaurantId: restaurant.id, role: "RESTAURANT_OWNER" },
+          select: { id: true, name: true, email: true },
+        });
+        if (owner && owner.email) {
+          NotificationService.notifyRestaurantNewOrder(
+            { id: restaurant.id, name: restaurant.name },
+            owner,
+            { id: order.id, total: order.total, type: order.type, customerName: order.customerName }
+          ).catch((e) => console.warn("[Email] Error restaurant new order:", e));
+        }
+      } catch (err) {
+        console.warn("[Email] Error dispatching order creation emails:", err);
+      }
+    })();
 
     return res.status(201).json({ success: true, message: "Public order created successfully", order });
   } catch (error: any) {

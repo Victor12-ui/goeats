@@ -1,6 +1,8 @@
 import { Request, Response, NextFunction } from "express";
 import { prisma } from "../../config/database";
 import { OrderType, OrderStatus, OrderItemStatus } from "@prisma/client";
+import { NotificationService } from "../notifications/notification.service";
+
 
 export async function createOrder(req: Request, res: Response, next: NextFunction) {
   try {
@@ -235,6 +237,8 @@ export async function updateOrderStatus(req: Request, res: Response, next: NextF
           },
         },
         table: true,
+        customer: true,
+        restaurant: true,
       },
     });
 
@@ -242,6 +246,22 @@ export async function updateOrderStatus(req: Request, res: Response, next: NextF
     const io = req.app.get("io");
     if (io) {
       io.to(`restaurant-${restaurantId}`).emit("order-status-updated", updatedOrder);
+    }
+
+    // Disparar correos al cliente según cambio de estado (Sección 2 del Plan)
+    if (updatedOrder.customer?.email) {
+      if (status === OrderStatus.PREPARING) {
+        NotificationService.notifyOrderPreparing(
+          { id: updatedOrder.id, restaurant: { name: updatedOrder.restaurant.name } },
+          { id: updatedOrder.customer.id, name: updatedOrder.customer.name, email: updatedOrder.customer.email }
+        ).catch((e) => console.warn("[Email] Error order preparing notification:", e));
+      } else if (status === OrderStatus.CANCELLED) {
+        NotificationService.notifyOrderCancelled(
+          { id: updatedOrder.id },
+          { id: updatedOrder.customer.id, name: updatedOrder.customer.name, email: updatedOrder.customer.email },
+          req.body.cancelReason
+        ).catch((e) => console.warn("[Email] Error order cancelled notification:", e));
+      }
     }
 
     return res.status(200).json({ success: true, message: `Order status updated to ${status}`, order: updatedOrder });

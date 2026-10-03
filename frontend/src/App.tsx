@@ -135,6 +135,7 @@ const AppLayout: React.FC<{ children: React.ReactNode }> = ({ children }) => {
         { to: "/admin/restaurants?tab=saas_customers", label: "Clientes & Plus" },
         { to: "/admin/restaurants?tab=saas_plans", label: "Planes SaaS" },
         { to: "/admin/restaurants?tab=saas_orders", label: "Pedidos SaaS" },
+        { to: "/admin/restaurants?tab=emails", label: "Correos & Gmail API" },
       ]
     },
     {

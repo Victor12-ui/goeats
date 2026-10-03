@@ -1,4 +1,4 @@
-﻿# Dependencies
+# Dependencies
 node_modules/
 */node_modules/
 
@@ -29,10 +29,19 @@ ibdata*
 auto.cnf
 binlog.*
 
-# Environment files
+# Environment files & Secrets
 .env
+*/.env
 .env*.local
+*/.env*.local
 !.env.example
+!*/.env.example
+client_secret*.json
+*/client_secret*.json
+*.p12
+*.pem
+*.key
+*.cert
 
 # Logs
 *.log

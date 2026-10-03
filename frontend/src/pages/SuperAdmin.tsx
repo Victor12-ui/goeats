@@ -23,6 +23,7 @@ import {
   Eye,
   EyeOff
 } from "lucide-react";
+import { EmailNotificationsTab } from "../components/admin/EmailNotificationsTab";
 
 interface Restaurant {
   id: number;
@@ -66,7 +67,8 @@ export const SuperAdmin: React.FC = () => {
 
   // New tab state
   const [searchParams] = useSearchParams();
-  const activeTab = (searchParams.get("tab") || "restaurants") as "restaurants" | "delivery" | "wallet" | "saas_customers" | "saas_plans" | "saas_orders" | "saas_categories";
+  const activeTab = (searchParams.get("tab") || "restaurants") as "restaurants" | "delivery" | "wallet" | "saas_customers" | "saas_plans" | "saas_orders" | "saas_categories" | "emails";
+
   const [drivers, setDrivers] = useState<any[]>([]);
   const [rates, setRates] = useState<any[]>([]);
 
@@ -448,6 +450,29 @@ export const SuperAdmin: React.FC = () => {
       }
     } catch (err: any) {
       alert(err.message || "Error al procesar la liquidación");
+    }
+  };
+
+  const handleToggleDriverStatus = async (driver: any) => {
+    const isApproving = !driver.isActive;
+    const confirmAction = window.confirm(
+      isApproving
+        ? `¿Confirmas que deseas APROBAR y activar al motorizado ${driver.name}?\n\nAl aprobarlo, podrá iniciar sesión y aceptar pedidos de entrega. Se le enviará un correo de confirmación.`
+        : `¿Deseas suspender o desactivar al motorizado ${driver.name}?`
+    );
+    if (!confirmAction) return;
+
+    try {
+      const res = await apiRequest(`/delivery/drivers/${driver.id}/toggle-active`, {
+        method: "POST",
+        body: JSON.stringify({ isActive: isApproving })
+      });
+      if (res.success) {
+        alert(res.message || (isApproving ? "Motorizado aprobado con éxito." : "Estado actualizado."));
+        loadDrivers();
+      }
+    } catch (err: any) {
+      alert(err.message || "Error al actualizar estado del motorizado");
     }
   };
 
@@ -1407,8 +1432,9 @@ export const SuperAdmin: React.FC = () => {
                 <thead>
                   <tr style={{ borderBottom: "1px solid var(--border-light)" }}>
                     <th style={{ padding: "16px 20px", textAlign: "left", fontSize: "13px", color: "var(--text-muted)" }}>MOTORIZADO</th>
-                    <th style={{ padding: "16px 20px", textAlign: "left", fontSize: "13px", color: "var(--text-muted)" }}>CÉDULA</th>
-                    <th style={{ padding: "16px 20px", textAlign: "left", fontSize: "13px", color: "var(--text-muted)" }}>CORREO ELECTRÓNICO</th>
+                    <th style={{ padding: "16px 20px", textAlign: "left", fontSize: "13px", color: "var(--text-muted)" }}>CÉDULA / CONTACTO</th>
+                    <th style={{ padding: "16px 20px", textAlign: "left", fontSize: "13px", color: "var(--text-muted)" }}>VEHÍCULO</th>
+                    <th style={{ padding: "16px 20px", textAlign: "center", fontSize: "13px", color: "var(--text-muted)" }}>ESTADO APROBACIÓN</th>
                     <th style={{ padding: "16px 20px", textAlign: "right", fontSize: "13px", color: "var(--text-muted)" }}>SALDO BILLETERA</th>
                     <th style={{ padding: "16px 20px", textAlign: "center", fontSize: "13px", color: "var(--text-muted)" }}>ACCIONES</th>
                   </tr>
@@ -1437,8 +1463,56 @@ export const SuperAdmin: React.FC = () => {
                             {driver.name} (Ref: @{driver.username})
                           </div>
                         </td>
-                        <td style={{ padding: "18px 20px", fontSize: "13px" }}>{driver.cedula}</td>
-                        <td style={{ padding: "18px 20px", fontSize: "13px", color: "var(--text-secondary)" }}>{driver.email || "Sin correo"}</td>
+                        <td style={{ padding: "18px 20px", fontSize: "13px" }}>
+                          <div><strong>CI:</strong> {driver.cedula}</div>
+                          <div style={{ color: "var(--text-secondary)", fontSize: "12px" }}>{driver.phone || "Sin teléfono"}</div>
+                          <div style={{ color: "var(--text-muted)", fontSize: "11px" }}>{driver.email || "Sin correo"}</div>
+                        </td>
+                        <td style={{ padding: "18px 20px", fontSize: "13px" }}>
+                          <span style={{
+                            padding: "3px 8px",
+                            borderRadius: "12px",
+                            backgroundColor: "#f1f5f9",
+                            fontWeight: 600,
+                            fontSize: "12px"
+                          }}>
+                            {driver.vehicleType === "BICI" ? "🚲 Bicicleta" : driver.vehicleType === "AUTO" ? "🚗 Automóvil" : "🛵 Moto"}
+                          </span>
+                          {driver.vehiclePlate && (
+                            <div style={{ fontSize: "11px", color: "var(--text-secondary)", marginTop: "4px" }}>
+                              Placa: <strong>{driver.vehiclePlate}</strong>
+                            </div>
+                          )}
+                        </td>
+                        <td style={{ padding: "18px 20px", textAlign: "center" }}>
+                          {driver.isActive ? (
+                            <span style={{
+                              display: "inline-block",
+                              padding: "4px 10px",
+                              borderRadius: "20px",
+                              backgroundColor: "rgba(46, 213, 115, 0.12)",
+                              color: "#2ed573",
+                              fontWeight: 700,
+                              fontSize: "12px",
+                              border: "1px solid rgba(46, 213, 115, 0.3)"
+                            }}>
+                              ✅ Aprobado / Activo
+                            </span>
+                          ) : (
+                            <span style={{
+                              display: "inline-block",
+                              padding: "4px 10px",
+                              borderRadius: "20px",
+                              backgroundColor: "rgba(255, 171, 0, 0.12)",
+                              color: "#d97706",
+                              fontWeight: 700,
+                              fontSize: "12px",
+                              border: "1px solid rgba(255, 171, 0, 0.3)"
+                            }}>
+                              ⏳ Pendiente Aprobación
+                            </span>
+                          )}
+                        </td>
                         <td style={{ padding: "18px 20px", textAlign: "right", fontWeight: "bold" }}>
                           <div style={{
                             color: driver.walletBalance > 0 ? "var(--success)" : driver.walletBalance <= -50 ? "#ff4757" : "var(--accent-primary)",
@@ -1476,6 +1550,24 @@ export const SuperAdmin: React.FC = () => {
                                 ⚡ Liquidar ${driver.walletBalance.toFixed(2)}
                               </button>
                             )}
+                            <button
+                              type="button"
+                              onClick={() => handleToggleDriverStatus(driver)}
+                              style={{
+                                padding: "6px 12px",
+                                fontSize: "12px",
+                                fontWeight: 700,
+                                borderRadius: "8px",
+                                border: "none",
+                                cursor: "pointer",
+                                backgroundColor: driver.isActive ? "#fee2e2" : "#dcfce7",
+                                color: driver.isActive ? "#dc2626" : "#16a34a",
+                              }}
+                              title={driver.isActive ? "Suspender acceso" : "Aprobar y habilitar cuenta"}
+                            >
+                              {driver.isActive ? "Pausar" : "Aprobar ✅"}
+                            </button>
+
                             <button
                               type="button"
                               onClick={() => {
@@ -1975,7 +2067,13 @@ export const SuperAdmin: React.FC = () => {
             </div>
           </div>
         )}
+
+        {/* ======================================= */}
+        {/* TAB 8: CORREOS Y GMAIL API OAUTH2       */}
+        {/* ======================================= */}
+        {activeTab === "emails" && <EmailNotificationsTab />}
       </main>
+
 
       {/* ======================================= */}
       {/* MODAL: REGISTER RESTAURANT              */}

@@ -1,8 +1,9 @@
 import React, { useEffect, useState } from "react";
 import { Link, useNavigate } from "react-router-dom";
 import { apiRequest } from "../utils/api";
-import { Star, Heart, Search, ChevronRight, Compass, Utensils, LogOut, Menu as MenuIcon, X as XIcon } from "lucide-react";
+import { Star, Heart, Search, ChevronRight, Compass, Utensils, LogOut, Menu as MenuIcon, X as XIcon, Sparkles, SlidersHorizontal } from "lucide-react";
 import { useAuth } from "../context/AuthContext";
+import { FoodPreferencesModal, FOOD_PREFERENCE_CATEGORIES } from "../components/FoodPreferencesModal";
 
 interface PublicRestaurant {
   id: number;
@@ -107,6 +108,10 @@ export const Aggregator: React.FC = () => {
   const [favorites, setFavorites] = useState<number[]>([]);
   const [menuOpen, setMenuOpen] = useState(false);
 
+  // Food Preferences & Recommendations State
+  const [preferencesModalOpen, setPreferencesModalOpen] = useState(false);
+  const [userPreferences, setUserPreferences] = useState<string[]>([]);
+
   const BRAND_LOGOS: Record<string, string> = {
     "el-artesanal": "/logos/el-artesanal.svg",
     "kfc": "/logos/kfc.svg",
@@ -199,6 +204,27 @@ export const Aggregator: React.FC = () => {
     loadRestaurants();
   }, []);
 
+  // Sync Food Preferences from user profile, localStorage, or setup query parameter
+  useEffect(() => {
+    if (user && (user as any).preferences && Array.isArray((user as any).preferences)) {
+      setUserPreferences((user as any).preferences);
+    } else {
+      try {
+        const stored = localStorage.getItem("goeats_food_preferences");
+        if (stored) {
+          const parsed = JSON.parse(stored);
+          if (Array.isArray(parsed)) setUserPreferences(parsed);
+        }
+      } catch (e) {}
+    }
+
+    const urlParams = new URLSearchParams(window.location.search);
+    if (urlParams.get("setup_preferences") === "true") {
+      setPreferencesModalOpen(true);
+      window.history.replaceState({}, document.title, window.location.pathname);
+    }
+  }, [user]);
+
   const toggleFavorite = (id: number, e: React.MouseEvent) => {
     e.preventDefault();
     e.stopPropagation();
@@ -261,6 +287,12 @@ export const Aggregator: React.FC = () => {
   // Subdivided categories for UI Sections
   const popularRestaurants = filteredRestaurants.filter(r => r.isPopular || parseFloat(r.rating) >= 4.6);
   const offerRestaurants = filteredRestaurants.filter(r => r.promoText !== null);
+
+  // Smart Recommendations based on culinary preferences
+  const recommendedRestaurants = filteredRestaurants.filter(rest => {
+    if (userPreferences.length === 0) return false;
+    return userPreferences.some(prefId => matchesCategory(rest, prefId));
+  });
 
   return (
     <div style={{ minHeight: "100vh", backgroundColor: "#ffffff", paddingBottom: "60px" }}>
@@ -376,6 +408,29 @@ export const Aggregator: React.FC = () => {
           }}>
             Hazte Plus ✨
           </Link>
+
+          {/* Preferences Quick Access Button */}
+          <button
+            onClick={() => setPreferencesModalOpen(true)}
+            style={{
+              fontSize: "13px",
+              fontWeight: "600",
+              color: userPreferences.length > 0 ? "#ff4757" : "#475569",
+              padding: "8px 14px",
+              borderRadius: "30px",
+              backgroundColor: userPreferences.length > 0 ? "rgba(255, 71, 87, 0.08)" : "#f8fafc",
+              border: userPreferences.length > 0 ? "1px solid rgba(255, 71, 87, 0.3)" : "1px solid #e2e8f0",
+              cursor: "pointer",
+              display: "flex",
+              alignItems: "center",
+              gap: "6px",
+              transition: "all 0.2s ease"
+            }}
+            title="Personalizar gustos y recomendaciones"
+          >
+            <Sparkles size={14} color="#ff4757" />
+            <span>{userPreferences.length > 0 ? `Mis Gustos (${userPreferences.length})` : "Mis Preferencias"}</span>
+          </button>
           {isAuthenticated && user ? (
             <div style={{ display: "flex", alignItems: "center", gap: "16px" }}>
               <div style={{ textAlign: "right" }}>
@@ -536,6 +591,27 @@ export const Aggregator: React.FC = () => {
               >
                 Hazte Plus ✨
               </Link>
+
+              <button
+                onClick={() => { setMenuOpen(false); setPreferencesModalOpen(true); }}
+                style={{
+                  display: "flex",
+                  alignItems: "center",
+                  justifyContent: "center",
+                  gap: "8px",
+                  fontSize: "14px",
+                  fontWeight: 600,
+                  color: "#ff4757",
+                  padding: "12px 16px",
+                  borderRadius: "30px",
+                  backgroundColor: "rgba(255, 71, 87, 0.08)",
+                  border: "1px solid rgba(255, 71, 87, 0.2)",
+                  cursor: "pointer"
+                }}
+              >
+                <Sparkles size={15} />
+                {userPreferences.length > 0 ? `Mis Preferencias (${userPreferences.length})` : "Configurar Preferencias"}
+              </button>
 
               {isAuthenticated && user ? (
                 <>
@@ -967,6 +1043,241 @@ export const Aggregator: React.FC = () => {
         ) : (
           <div style={{ display: "flex", flexDirection: "column", gap: "50px" }}>
             
+            {/* SECTION 0: Recomendados para ti (Sistema de Preferencias Gastronómicas) */}
+            {activeCategory === "all" && !searchQuery && (
+              userPreferences.length > 0 && recommendedRestaurants.length > 0 ? (
+                <div style={{
+                  backgroundColor: "rgba(255, 71, 87, 0.02)",
+                  borderRadius: "24px",
+                  padding: "24px 20px",
+                  border: "1px solid rgba(255, 71, 87, 0.12)",
+                }}>
+                  <div style={{ display: "flex", justifyContent: "space-between", alignItems: "flex-end", marginBottom: "18px", flexWrap: "wrap", gap: "10px" }}>
+                    <div>
+                      <div style={{
+                        display: "inline-flex",
+                        alignItems: "center",
+                        gap: "6px",
+                        fontSize: "12px",
+                        fontWeight: 700,
+                        color: "#ff4757",
+                        textTransform: "uppercase",
+                        letterSpacing: "0.5px",
+                        marginBottom: "4px"
+                      }}>
+                        <Sparkles size={14} /> Recomendaciones Personalizadas
+                      </div>
+                      <h2 style={{ fontSize: "22px", fontWeight: "800", color: "#202124", margin: 0 }}>
+                        Recomendados para ti según tus gustos
+                      </h2>
+                      <div style={{ display: "flex", gap: "6px", flexWrap: "wrap", marginTop: "8px" }}>
+                        {userPreferences.map((prefId) => {
+                          const cat = FOOD_PREFERENCE_CATEGORIES.find(c => c.id === prefId);
+                          if (!cat) return null;
+                          return (
+                            <span key={prefId} style={{
+                              fontSize: "12px",
+                              backgroundColor: "#ffffff",
+                              border: "1px solid #ffd1d6",
+                              color: "#d63031",
+                              padding: "2px 8px",
+                              borderRadius: "12px",
+                              fontWeight: 600
+                            }}>
+                              {cat.emoji} {cat.name}
+                            </span>
+                          );
+                        })}
+                      </div>
+                    </div>
+
+                    <button
+                      onClick={() => setPreferencesModalOpen(true)}
+                      style={{
+                        display: "flex",
+                        alignItems: "center",
+                        gap: "6px",
+                        fontSize: "12px",
+                        color: "#ff4757",
+                        fontWeight: "700",
+                        cursor: "pointer",
+                        background: "#ffffff",
+                        border: "1px solid rgba(255, 71, 87, 0.3)",
+                        borderRadius: "20px",
+                        padding: "6px 14px",
+                        boxShadow: "0 2px 5px rgba(255, 71, 87, 0.08)",
+                      }}
+                    >
+                      <SlidersHorizontal size={13} />
+                      Cambiar gustos
+                    </button>
+                  </div>
+
+                  <div className="no-scrollbar" style={{
+                    display: "flex",
+                    gap: "20px",
+                    overflowX: "auto",
+                    paddingBottom: "10px",
+                    scrollBehavior: "smooth"
+                  }}>
+                    {recommendedRestaurants.map((rest) => (
+                      <Link
+                        to={`/r/${rest.slug}`}
+                        key={`rec-${rest.id}`}
+                        style={{
+                          width: "300px",
+                          flexShrink: 0,
+                          display: "flex",
+                          flexDirection: "column",
+                          gap: "10px",
+                          position: "relative",
+                          textDecoration: "none"
+                        }}
+                      >
+                        <div style={{
+                          position: "relative",
+                          width: "100%",
+                          height: "165px",
+                          borderRadius: "16px",
+                          overflow: "hidden",
+                          backgroundColor: "#f1f3f4"
+                        }}>
+                          <img
+                            src={rest.coverImage}
+                            alt={rest.name}
+                            onError={(e) => {
+                              e.currentTarget.src = "https://images.unsplash.com/photo-1555396273-367ea4eb4db5?w=800&auto=format&fit=crop&q=80";
+                            }}
+                            style={{ width: "100%", height: "100%", objectFit: "cover" }}
+                          />
+                          
+                          <div style={{
+                            position: "absolute",
+                            top: "12px",
+                            left: "12px",
+                            backgroundColor: "rgba(15, 23, 42, 0.85)",
+                            backdropFilter: "blur(4px)",
+                            color: "#ffffff",
+                            padding: "4px 9px",
+                            borderRadius: "20px",
+                            fontSize: "11px",
+                            fontWeight: 700,
+                            display: "flex",
+                            alignItems: "center",
+                            gap: "4px"
+                          }}>
+                            <Sparkles size={11} color="#fbbf24" /> Recomendado
+                          </div>
+
+                          <button
+                            onClick={(e) => toggleFavorite(rest.id, e)}
+                            style={{
+                              position: "absolute",
+                              top: "12px",
+                              right: "12px",
+                              width: "32px",
+                              height: "32px",
+                              borderRadius: "50%",
+                              backgroundColor: "rgba(255, 255, 255, 0.9)",
+                              border: "none",
+                              display: "flex",
+                              alignItems: "center",
+                              justifyContent: "center",
+                              cursor: "pointer",
+                              color: favorites.includes(rest.id) ? "#ff4757" : "#5f6368"
+                            }}
+                          >
+                            <Heart size={16} fill={favorites.includes(rest.id) ? "#ff4757" : "none"} />
+                          </button>
+                        </div>
+
+                        <div>
+                          <div style={{ display: "flex", justifyContent: "space-between", alignItems: "baseline" }}>
+                            <h3 style={{ fontSize: "16px", fontWeight: "700", color: "#202124", margin: 0 }}>
+                              {rest.name}
+                            </h3>
+                            <div style={{
+                              display: "flex",
+                              alignItems: "center",
+                              gap: "3px",
+                              fontSize: "12px",
+                              fontWeight: "700",
+                              backgroundColor: "#f1f3f4",
+                              padding: "2px 6px",
+                              borderRadius: "6px"
+                            }}>
+                              <Star size={12} fill="#ff4757" color="#ff4757" />
+                              <span>{rest.rating}</span>
+                            </div>
+                          </div>
+                          <p style={{ fontSize: "12px", color: "#5f6368", margin: "4px 0 0 0" }}>
+                            {rest.category} • {rest.deliveryTime} • {rest.deliveryCost}
+                          </p>
+                        </div>
+                      </Link>
+                    ))}
+                  </div>
+                </div>
+              ) : userPreferences.length === 0 ? (
+                /* Recommendation Teaser Banner */
+                <div style={{
+                  background: "linear-gradient(135deg, #fff5f5 0%, #ffe3e3 100%)",
+                  borderRadius: "20px",
+                  padding: "24px 28px",
+                  border: "1px solid #ffd1d6",
+                  display: "flex",
+                  alignItems: "center",
+                  justifyContent: "space-between",
+                  gap: "20px",
+                  flexWrap: "wrap",
+                }}>
+                  <div style={{ maxWidth: "560px" }}>
+                    <div style={{
+                      display: "inline-flex",
+                      alignItems: "center",
+                      gap: "6px",
+                      fontSize: "11px",
+                      fontWeight: 800,
+                      color: "#e84118",
+                      textTransform: "uppercase",
+                      letterSpacing: "0.5px",
+                      marginBottom: "6px",
+                    }}>
+                      <Sparkles size={14} /> Recomendaciones a tu medida
+                    </div>
+                    <h3 style={{ fontSize: "18px", fontWeight: 800, color: "#2f3640", margin: "0 0 6px 0" }}>
+                      ¿Qué se te antoja comer hoy?
+                    </h3>
+                    <p style={{ fontSize: "13px", color: "#718093", margin: 0, lineHeight: "1.4" }}>
+                      Elige tus categorías y comidas preferidas (hamburguesas, pizza, sushi, tacos...) y te recomendaremos los mejores platos y locales destacados.
+                    </p>
+                  </div>
+
+                  <button
+                    onClick={() => setPreferencesModalOpen(true)}
+                    style={{
+                      background: "linear-gradient(135deg, #ff4757, #ff6b81)",
+                      color: "#ffffff",
+                      border: "none",
+                      borderRadius: "30px",
+                      padding: "12px 22px",
+                      fontSize: "13px",
+                      fontWeight: 700,
+                      cursor: "pointer",
+                      boxShadow: "0 4px 14px rgba(255, 71, 87, 0.3)",
+                      display: "flex",
+                      alignItems: "center",
+                      gap: "8px",
+                      flexShrink: 0,
+                    }}
+                  >
+                    <SlidersHorizontal size={15} />
+                    Personalizar mis preferencias
+                  </button>
+                </div>
+              ) : null
+            )}
+
             {/* SECTION 1: Favoritos Nacionales (Carousel) */}
             {activeCategory === "all" && !searchQuery && popularRestaurants.length > 0 && (
               <div>
@@ -1501,6 +1812,13 @@ export const Aggregator: React.FC = () => {
           </Link>
         </div>
       </footer>
+
+      {/* Culinary Preferences Modal */}
+      <FoodPreferencesModal
+        isOpen={preferencesModalOpen}
+        onClose={() => setPreferencesModalOpen(false)}
+        onPreferencesUpdated={(newPrefs) => setUserPreferences(newPrefs)}
+      />
     </div>
   );
 };

@@ -39,6 +39,22 @@ enum OrderItemStatus {
   SERVED
 }
 
+enum RestaurantStatus {
+  PENDING
+  UNDER_REVIEW
+  APPROVED
+  ACTIVE
+  REJECTED
+  SUSPENDED
+}
+
+enum EmailStatus {
+  PENDING
+  SENDING
+  SENT
+  FAILED
+}
+
 model Restaurant {
   id                 Int              @id @default(autoincrement())
   name               String
@@ -46,6 +62,7 @@ model Restaurant {
   logo               String?          @db.LongText
   address            String?
   phone              String?
+  status             RestaurantStatus @default(ACTIVE)
   wifiSsid           String?
   wifiPassword       String?
   qrOrderingEnabled  Boolean          @default(true)
@@ -124,6 +141,10 @@ model User {
   updatedAt    DateTime     @updatedAt
 
   cedula             String?              @unique
+  phone              String?
+  vehicleType        String?              // "MOTO", "BICI", "AUTO"
+  vehiclePlate       String?
+  preferencesJson    String?              @db.Text // Array JSON de categorías favoritas para recomendación
   isPlus             Boolean              @default(false)
   walletBalance      Float                @default(0.0)
   maxDebtLimit       Float                @default(50.0) // Límite de deuda en balance antes de pausar pedidos en efectivo
@@ -131,6 +152,7 @@ model User {
   driverOrders       Order[]              @relation("DriverOrders")
   customerOrders     Order[]              @relation("CustomerOrders")
   saasOrders         SaaSOrder[]          @relation("SaaSUserOrders")
+
 
   restaurantId Int?
   restaurant   Restaurant?  @relation(fields: [restaurantId], references: [id])
@@ -609,3 +631,25 @@ model SaaSPlan {
   createdAt   DateTime @default(now())
   updatedAt   DateTime @updatedAt
 }
+
+model EmailNotification {
+  id                Int         @id @default(autoincrement())
+  userId            Int?
+  recipientEmail    String
+  type              String      // e.g. "CUSTOMER_WELCOME", "ORDER_ACCEPTED", "RESTAURANT_APPROVED"
+  template          String      // e.g. "customer/welcome", "restaurant/approved"
+  subject           String
+  status            EmailStatus @default(PENDING)
+  providerMessageId String?
+  error             String?     @db.Text
+  eventId           String?     @unique
+  metadataJson      String?     @db.LongText
+  sentAt            DateTime?
+  createdAt         DateTime    @default(now())
+  updatedAt         DateTime    @updatedAt
+
+  @@index([recipientEmail])
+  @@index([type])
+  @@index([status])
+}
+

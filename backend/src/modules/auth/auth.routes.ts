@@ -12,6 +12,7 @@ import {
   deleteStaff,
   socialLogin,
   completeProfile,
+  savePreferences,
 } from "./auth.controller";
 import { authMiddleware } from "../../middlewares/auth";
 import { tenantMiddleware } from "../../middlewares/tenant";
@@ -23,6 +24,7 @@ const router = Router();
 router.post("/login", login);
 router.post("/social-login", socialLogin);
 router.post("/complete-profile", completeProfile);
+router.post("/preferences", authMiddleware, savePreferences);
 router.post("/register-owner", registerOwner);
 router.post("/register-customer", registerCustomer);
 router.post("/register-driver", registerDriver);

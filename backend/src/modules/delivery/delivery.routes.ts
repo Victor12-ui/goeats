@@ -11,6 +11,7 @@ import {
   getDriverWalletHistory,
   rechargeDriverWallet,
   getDriversList,
+  toggleDriverActive,
   getDeliveryRates,
   saveDeliveryRate,
   getActiveRate,
@@ -34,6 +35,7 @@ router.get("/wallet", authorize([Role.MOTORIZADO]), getDriverWalletHistory);
 
 // Super Admin endpoints (Role: SUPER_ADMIN)
 router.get("/drivers", authorize([Role.SUPER_ADMIN]), getDriversList);
+router.post("/drivers/:id/toggle-active", authorize([Role.SUPER_ADMIN]), toggleDriverActive);
 router.post("/recharge", authorize([Role.SUPER_ADMIN]), rechargeDriverWallet);
 router.post("/settle", authorize([Role.SUPER_ADMIN]), settleDriverBalance);
 router.get("/rates", authorize([Role.SUPER_ADMIN]), getDeliveryRates);

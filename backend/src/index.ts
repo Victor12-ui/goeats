@@ -74,6 +74,7 @@ import reportsRouter from "./modules/reports/reports.routes";
 import deliveryRouter from "./modules/delivery/delivery.routes";
 import saasRouter from "./modules/saas/saas.routes";
 import saasCategoriesRouter from "./modules/saas-categories/saas-categories.routes";
+import notificationsRouter from "./modules/notifications/notification.routes";
 
 // API routes
 app.use("/api/auth", authRouter);
@@ -92,6 +93,8 @@ app.use("/api/reports", reportsRouter);
 app.use("/api/delivery", deliveryRouter);
 app.use("/api/saas", saasRouter);
 app.use("/api/saas-categories", saasCategoriesRouter);
+app.use("/api/notifications", notificationsRouter);
+
 
 // Global Error Handler
 app.use(errorHandler);

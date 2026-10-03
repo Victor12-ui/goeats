@@ -1,6 +1,8 @@
 import { Request, Response, NextFunction } from "express";
 import { prisma } from "../../config/database";
 import { OrderStatus, Role } from "@prisma/client";
+import { NotificationService } from "../notifications/notification.service";
+
 
 // Get active config or default fallback values
 async function getActiveDeliveryRate() {
@@ -209,6 +211,31 @@ export async function takeOrder(req: Request, res: Response, next: NextFunction)
       });
     }
 
+    // Disparar correos a Repartidor y Cliente (Sección 2 y 3 del Plan)
+    (async () => {
+      try {
+        // Notificar al cliente: Repartidor asignado y en camino con su PIN de seguridad
+        if (order.customer?.email) {
+          NotificationService.notifyDriverAssigned(
+            { id: order.id, deliveryPin: order.deliveryPin, restaurant: { name: order.restaurant.name } },
+            { id: order.customer.id, name: order.customer.name, email: order.customer.email },
+            driver.name
+          ).catch((e) => console.warn("[Email] Error customer driver assigned:", e));
+        }
+
+        // Notificar al motorizado con detalles del pedido
+        if (driver.email) {
+          NotificationService.notifyDriverNewOrder(
+            { id: driver.id, name: driver.name, email: driver.email },
+            { id: order.id, total: order.total, deliveryAddress: order.deliveryAddress, driverEarnings },
+            { name: order.restaurant.name, address: order.restaurant.address }
+          ).catch((e) => console.warn("[Email] Error driver new order:", e));
+        }
+      } catch (err) {
+        console.warn("[Email] Error dispatching delivery accept notifications:", err);
+      }
+    })();
+
     return res.status(200).json({ success: true, message: "Pedido tomado con éxito", order: updatedOrder });
   } catch (error) {
     next(error);
@@ -402,6 +429,14 @@ export async function completeDelivery(req: Request, res: Response, next: NextFu
         orderId: order.id,
         status: OrderStatus.DELIVERED,
       });
+    }
+
+    // Notificar al cliente: Pedido entregado (Sección 2 del Plan)
+    if (order.customer?.email) {
+      NotificationService.notifyOrderDelivered(
+        { id: order.id, restaurant: { name: order.restaurant.name } },
+        { id: order.customer.id, name: order.customer.name, email: order.customer.email }
+      ).catch((e) => console.warn("[Email] Error customer order delivered:", e));
     }
 
     return res.status(200).json({ success: true, message: "Pedido entregado correctamente", order: updatedOrder });
@@ -610,15 +645,60 @@ export async function getDriversList(req: Request, res: Response, next: NextFunc
         username: true,
         name: true,
         email: true,
+        phone: true,
         cedula: true,
+        vehicleType: true,
+        vehiclePlate: true,
         walletBalance: true,
         isActive: true,
         createdAt: true,
       },
-      orderBy: { name: "asc" },
+      orderBy: { createdAt: "desc" },
     });
 
     return res.status(200).json({ success: true, drivers });
+  } catch (error) {
+    next(error);
+  }
+}
+
+// 8.1 Toggle Driver Approval / Active Status
+export async function toggleDriverActive(req: Request, res: Response, next: NextFunction) {
+  try {
+    const { id } = req.params;
+    const { isActive, reason } = req.body;
+
+    const driver = await prisma.user.findUnique({
+      where: { id: parseInt(id, 10) },
+    });
+
+    if (!driver || driver.role !== Role.MOTORIZADO) {
+      return res.status(404).json({ success: false, message: "Motorizado no encontrado" });
+    }
+
+    const newActiveState = isActive !== undefined ? !!isActive : !driver.isActive;
+
+    const updated = await prisma.user.update({
+      where: { id: driver.id },
+      data: { isActive: newActiveState },
+    });
+
+    // Enviar correo de notificación
+    if (driver.email) {
+      if (newActiveState) {
+        NotificationService.notifyDriverApproved({ id: driver.id, name: driver.name, email: driver.email })
+          .catch((e) => console.warn("[Email] Error approved driver:", e));
+      } else if (reason) {
+        NotificationService.notifyDriverRejected({ id: driver.id, name: driver.name, email: driver.email }, reason)
+          .catch((e) => console.warn("[Email] Error rejected driver:", e));
+      }
+    }
+
+    return res.status(200).json({
+      success: true,
+      message: newActiveState ? "Motorizado aprobado y activado exitosamente" : "Motorizado suspendido o desactivado",
+      driver: updated,
+    });
   } catch (error) {
     next(error);
   }
