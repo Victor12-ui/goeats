@@ -1,7 +1,7 @@
-import React, { useEffect, useRef, useState } from "react";
+import React, { useEffect, useRef, useState, useCallback } from "react";
 import L from "leaflet";
 import "leaflet/dist/leaflet.css";
-import { Navigation, ExternalLink, Compass } from "lucide-react";
+import { Navigation, ExternalLink, Compass, RefreshCw, Radio } from "lucide-react";
 
 interface RouteMapProps {
   orderId?: number;
@@ -58,6 +58,10 @@ export const RouteMap: React.FC<RouteMapProps> = ({
 
   const [distanceKm, setDistanceKm] = useState<number>(0);
   const [etaMinutes, setEtaMinutes] = useState<number>(10);
+  const [gpsStatus, setGpsStatus] = useState<"IDLE" | "ACTIVE" | "UPDATING" | "ERROR">("IDLE");
+  const [currentGps, setCurrentGps] = useState<{ lat: number; lng: number } | null>(
+    driverLat && driverLng ? { lat: driverLat, lng: driverLng } : null
+  );
 
   // Haversine fallback calculation
   const calculateHaversine = (lat1: number, lon1: number, lat2: number, lon2: number): number => {
@@ -72,6 +76,23 @@ export const RouteMap: React.FC<RouteMapProps> = ({
         Math.sin(dLon / 2);
     const c = 2 * Math.atan2(Math.sqrt(a), Math.sqrt(1 - a));
     return parseFloat((R * c).toFixed(2));
+  };
+
+  // Helper to create driver HTML pin with animated radar pulse
+  const createDriverMarkerHtml = (name?: string | null, isSelf: boolean = false) => {
+    const label = isSelf ? "Tú (Repartidor)" : (name ? `🛵 ${name}` : "🛵 Repartidor");
+    return `
+      <div style="position: relative; display: flex; flex-direction: column; align-items: center; transform: translate(-50%, -100%);">
+        <div style="background: rgba(18, 24, 38, 0.95); color: #2ed573; padding: 4px 10px; border-radius: 12px; font-weight: 800; font-size: 11px; box-shadow: 0 4px 14px rgba(0,0,0,0.5); white-space: nowrap; margin-bottom: 4px; border: 1.5px solid #2ed573; display: flex; align-items: center; gap: 5px;">
+          <span style="display: inline-block; width: 7px; height: 7px; background: #2ed573; border-radius: 50%; box-shadow: 0 0 6px #2ed573;"></span>
+          <span>${label}</span>
+        </div>
+        <div style="position: relative; width: 34px; height: 34px; background: #2ed573; border: 2.5px solid #ffffff; border-radius: 50%; display: flex; align-items: center; justify-content: center; box-shadow: 0 4px 14px rgba(46,213,115,0.7); font-size: 17px;">
+          🏍️
+          <div style="position: absolute; inset: -6px; border-radius: 50%; border: 2px solid #2ed573; opacity: 0.7; animation: leaflet-radar-pulse 1.8s ease-out infinite;"></div>
+        </div>
+      </div>
+    `;
   };
 
   // Fetch vehicular street route through Loja streets from OSRM
@@ -113,55 +134,200 @@ export const RouteMap: React.FC<RouteMapProps> = ({
     };
   };
 
-  // Setup GPS watcher if in Driver view to update driver live position
+  // Manual GPS refresh for Driver view
+  const handleManualGpsRefresh = useCallback(() => {
+    if (!navigator.geolocation) {
+      alert("Tu navegador no soporta geolocalización GPS.");
+      return;
+    }
+    setGpsStatus("UPDATING");
+    navigator.geolocation.getCurrentPosition(
+      (pos) => {
+        const { latitude, longitude } = pos.coords;
+        setCurrentGps({ lat: latitude, lng: longitude });
+        setGpsStatus("ACTIVE");
+
+        // Move marker
+        if (driverMarkerRef.current) {
+          driverMarkerRef.current.setLatLng([latitude, longitude]);
+          driverMarkerRef.current.setOpacity(1);
+        } else if (mapInstanceRef.current) {
+          const driverIcon = L.divIcon({
+            className: "clean-driver-marker",
+            html: createDriverMarkerHtml(driverName, true),
+            iconSize: [0, 0],
+          });
+          const marker = L.marker([latitude, longitude], { icon: driverIcon, zIndexOffset: 1000 }).addTo(mapInstanceRef.current);
+          marker.bindPopup(`<b>🛵 Tu Ubicación en Vivo</b>`);
+          driverMarkerRef.current = marker;
+        }
+
+        const remDist = calculateHaversine(latitude, longitude, delivL, delivG);
+        setDistanceKm(remDist);
+        setEtaMinutes(Math.max(1, Math.round(remDist * 3.2 + 1)));
+
+        if (onDriverLocationUpdate) {
+          onDriverLocationUpdate(latitude, longitude);
+        }
+      },
+      (err) => {
+        console.warn("Error manual GPS:", err);
+        setGpsStatus("ERROR");
+        alert("No se pudo obtener tu ubicación GPS. Asegúrate de otorgar permisos de ubicación en el navegador.");
+      },
+      { enableHighAccuracy: true, timeout: 10000, maximumAge: 0 }
+    );
+  }, [delivL, delivG, driverName, onDriverLocationUpdate]);
+
+  // Simulation step helper (useful for testing or demo without moving in real vehicle)
+  const handleSimulateAdvance = useCallback(() => {
+    const originLat = currentGps?.lat ?? restL;
+    const originLng = currentGps?.lng ?? restG;
+
+    // Advance 15% towards customer delivery destination
+    const nextLat = originLat + (delivL - originLat) * 0.2;
+    const nextLng = originLng + (delivG - originLng) * 0.2;
+
+    setCurrentGps({ lat: nextLat, lng: nextLng });
+    setGpsStatus("ACTIVE");
+
+    if (driverMarkerRef.current) {
+      driverMarkerRef.current.setLatLng([nextLat, nextLng]);
+      driverMarkerRef.current.setOpacity(1);
+    } else if (mapInstanceRef.current) {
+      const driverIcon = L.divIcon({
+        className: "clean-driver-marker",
+        html: createDriverMarkerHtml(driverName, isDriverView),
+        iconSize: [0, 0],
+      });
+      const marker = L.marker([nextLat, nextLng], { icon: driverIcon, zIndexOffset: 1000 }).addTo(mapInstanceRef.current);
+      driverMarkerRef.current = marker;
+    }
+
+    const remDist = calculateHaversine(nextLat, nextLng, delivL, delivG);
+    setDistanceKm(remDist);
+    setEtaMinutes(Math.max(1, Math.round(remDist * 3.2 + 1)));
+
+    if (onDriverLocationUpdate) {
+      onDriverLocationUpdate(nextLat, nextLng);
+    }
+  }, [currentGps, restL, restG, delivL, delivG, driverName, isDriverView, onDriverLocationUpdate]);
+
+  // Reactive Effect: Update Driver Marker whenever driverLat/driverLng props change (e.g. for customer)
+  useEffect(() => {
+    const map = mapInstanceRef.current;
+    if (!map) return;
+
+    if (driverLat != null && driverLng != null && !isNaN(driverLat) && !isNaN(driverLng)) {
+      setCurrentGps({ lat: driverLat, lng: driverLng });
+
+      if (driverMarkerRef.current) {
+        driverMarkerRef.current.setLatLng([driverLat, driverLng]);
+        driverMarkerRef.current.setOpacity(1);
+      } else {
+        const driverIcon = L.divIcon({
+          className: "clean-driver-marker",
+          html: createDriverMarkerHtml(driverName, isDriverView),
+          iconSize: [0, 0],
+        });
+        const marker = L.marker([driverLat, driverLng], { icon: driverIcon, zIndexOffset: 1000 }).addTo(map);
+        marker.bindPopup(`<b>🛵 ${isDriverView ? "Tu ubicación actual" : (driverName || "Repartidor en camino")}</b>`);
+        driverMarkerRef.current = marker;
+      }
+
+      // Dynamically calculate remaining distance and ETA to customer destination
+      const remDist = calculateHaversine(driverLat, driverLng, delivL, delivG);
+      setDistanceKm(remDist);
+      setEtaMinutes(Math.max(1, Math.round(remDist * 3.2 + 1)));
+    }
+  }, [driverLat, driverLng, driverName, isDriverView, delivL, delivG]);
+
+  // Setup live GPS watcher if in Driver view
   useEffect(() => {
     if (isDriverView && navigator.geolocation) {
+      let isMounted = true;
+      setGpsStatus("UPDATING");
+
       const watchId = navigator.geolocation.watchPosition(
         (pos) => {
+          if (!isMounted) return;
           const { latitude, longitude } = pos.coords;
+          setGpsStatus("ACTIVE");
+          setCurrentGps({ lat: latitude, lng: longitude });
 
-          // Only move marker if it's more than 30m away from customer destination to avoid overlapping badges
-          const distToCustomer = calculateHaversine(latitude, longitude, delivL, delivG);
           if (driverMarkerRef.current) {
-            if (distToCustomer > 0.05) {
-              driverMarkerRef.current.setLatLng([latitude, longitude]);
-              driverMarkerRef.current.setOpacity(1);
-            }
+            driverMarkerRef.current.setLatLng([latitude, longitude]);
+            driverMarkerRef.current.setOpacity(1);
+          } else if (mapInstanceRef.current) {
+            const driverIcon = L.divIcon({
+              className: "clean-driver-marker",
+              html: createDriverMarkerHtml(driverName, true),
+              iconSize: [0, 0],
+            });
+            const marker = L.marker([latitude, longitude], { icon: driverIcon, zIndexOffset: 1000 }).addTo(mapInstanceRef.current);
+            marker.bindPopup(`<b>🛵 Tu Ubicación en Vivo</b>`);
+            driverMarkerRef.current = marker;
           }
+
+          const remDist = calculateHaversine(latitude, longitude, delivL, delivG);
+          setDistanceKm(remDist);
+          setEtaMinutes(Math.max(1, Math.round(remDist * 3.2 + 1)));
 
           if (onDriverLocationUpdate) {
             onDriverLocationUpdate(latitude, longitude);
           }
         },
-        (err) => console.warn("GPS tracking watch error:", err),
+        (err) => {
+          console.warn("GPS tracking watch error:", err);
+          if (isMounted) setGpsStatus("ERROR");
+        },
         { enableHighAccuracy: true, timeout: 15000, maximumAge: 5000 }
       );
 
-      return () => navigator.geolocation.clearWatch(watchId);
+      return () => {
+        isMounted = false;
+        navigator.geolocation.clearWatch(watchId);
+      };
     }
-  }, [isDriverView, onDriverLocationUpdate, delivL, delivG]);
-
-  // Google Maps Navigation (Restaurant to Customer)
-  const openGoogleMapsNavigation = () => {
-    const url = `https://www.google.com/maps/dir/?api=1&origin=${restL},${restG}&destination=${delivL},${delivG}&travelmode=driving`;
-    window.open(url, "_blank");
-  };
-
-  // Waze Navigation (To Customer)
-  const openWazeNavigation = () => {
-    const url = `https://waze.com/ul?ll=${delivL},${delivG}&navigate=yes`;
-    window.open(url, "_blank");
-  };
+  }, [isDriverView, onDriverLocationUpdate, driverName, delivL, delivG]);
 
   // Center on Full Route
   const handleRecenter = () => {
     if (mapInstanceRef.current) {
-      const bounds = L.latLngBounds([
+      const points: [number, number][] = [
         [restL, restG],
         [delivL, delivG],
-      ]);
+      ];
+      if (currentGps?.lat && currentGps?.lng) {
+        points.push([currentGps.lat, currentGps.lng]);
+      } else if (driverLat && driverLng) {
+        points.push([driverLat, driverLng]);
+      }
+      const bounds = L.latLngBounds(points);
       mapInstanceRef.current.fitBounds(bounds, { padding: [50, 50] });
     }
+  };
+
+  // Google Maps Navigation
+  const openGoogleMapsNavigation = (target: "CUSTOMER" | "RESTAURANT" = "CUSTOMER") => {
+    const originCoords = currentGps
+      ? `${currentGps.lat},${currentGps.lng}`
+      : `${restL},${restG}`;
+    const destCoords = target === "CUSTOMER"
+      ? `${delivL},${delivG}`
+      : `${restL},${restG}`;
+
+    const url = `https://www.google.com/maps/dir/?api=1&origin=${originCoords}&destination=${destCoords}&travelmode=driving`;
+    window.open(url, "_blank");
+  };
+
+  // Waze Navigation
+  const openWazeNavigation = (target: "CUSTOMER" | "RESTAURANT" = "CUSTOMER") => {
+    const destCoords = target === "CUSTOMER"
+      ? `${delivL},${delivG}`
+      : `${restL},${restG}`;
+    const url = `https://waze.com/ul?ll=${destCoords}&navigate=yes`;
+    window.open(url, "_blank");
   };
 
   // Initialize Route Map with Street Network from Restaurant to Customer
@@ -183,16 +349,16 @@ export const RouteMap: React.FC<RouteMapProps> = ({
         }
       ).addTo(map);
 
-      // 1. Full Street Route (Thick glowing polyline from Restaurant -> Customer)
-      // Shadow casing for high contrast
+      // 1. Shadow casing polyline
       L.polyline([], {
         color: "#057a55",
         weight: 8,
-        opacity: 0.5,
+        opacity: 0.45,
         lineCap: "round",
         lineJoin: "round",
       }).addTo(map);
 
+      // 2. Main street route polyline
       const mainRoute = L.polyline([], {
         color: "#2ed573",
         weight: 5,
@@ -202,13 +368,12 @@ export const RouteMap: React.FC<RouteMapProps> = ({
       }).addTo(map);
       mainRouteLineRef.current = mainRoute;
 
-      // 2. Fetch turn-by-turn route between Restaurant and Customer
+      // Turn-by-turn route between Restaurant and Customer
       fetchStreetRoute(restL, restG, delivL, delivG).then((routeData) => {
         mainRoute.setLatLngs(routeData.coordinates);
         setDistanceKm(routeData.distanceKm);
         setEtaMinutes(routeData.durationMin);
 
-        // Fit map bounds to show complete street path
         const bounds = L.latLngBounds([
           [restL, restG],
           [delivL, delivG],
@@ -217,10 +382,10 @@ export const RouteMap: React.FC<RouteMapProps> = ({
         map.fitBounds(bounds, { padding: [45, 45] });
       });
 
-      // 3. Restaurant Origin Marker (Orange / Gold Badge)
+      // 3. Restaurant Origin Marker (Gold Badge)
       const restIconHtml = `
         <div style="position: relative; display: flex; flex-direction: column; align-items: center; transform: translate(-50%, -100%);">
-          <div style="background: rgba(20, 24, 33, 0.92); color: #ffd700; padding: 4px 10px; border-radius: 12px; font-weight: 800; font-size: 11px; box-shadow: 0 4px 12px rgba(0,0,0,0.5); white-space: nowrap; margin-bottom: 3px; border: 1px solid rgba(255,215,0,0.35); backdrop-filter: blur(4px);">
+          <div style="background: rgba(20, 24, 33, 0.94); color: #ffd700; padding: 4px 10px; border-radius: 12px; font-weight: 800; font-size: 11px; box-shadow: 0 4px 12px rgba(0,0,0,0.5); white-space: nowrap; margin-bottom: 3px; border: 1px solid rgba(255,215,0,0.4); backdrop-filter: blur(4px);">
             🏪 ${restaurantName}
           </div>
           <div style="width: 26px; height: 26px; background: #ff9f43; border: 2.5px solid #ffffff; border-radius: 50%; display: flex; align-items: center; justify-content: center; box-shadow: 0 4px 10px rgba(255,159,67,0.6);">
@@ -257,27 +422,18 @@ export const RouteMap: React.FC<RouteMapProps> = ({
         .addTo(map)
         .bindPopup(`<b>Entrega a:</b><br/>${customerName || "Cliente"}<br/>${deliveryAddress}`);
 
-      // 5. Driver Marker (Only rendered if driver is separate from customer and restaurant)
-      const distDriverToCustomer = driverLat && driverLng ? calculateHaversine(driverLat, driverLng, delivL, delivG) : 999;
-      const distDriverToRest = driverLat && driverLng ? calculateHaversine(driverLat, driverLng, restL, restG) : 999;
+      // 5. Driver Marker if coordinates already available
+      const initDriverLat = driverLat ?? currentGps?.lat;
+      const initDriverLng = driverLng ?? currentGps?.lng;
 
-      if (driverLat && driverLng && distDriverToCustomer > 0.08 && distDriverToRest > 0.08) {
-        const driverIconHtml = `
-          <div style="position: relative; display: flex; flex-direction: column; align-items: center; transform: translate(-50%, -100%);">
-            <div style="background: #2ed573; color: #000000; padding: 2px 8px; border-radius: 10px; font-weight: 800; font-size: 9.5px; box-shadow: 0 3px 8px rgba(46,213,115,0.4); white-space: nowrap; margin-bottom: 2px;">
-              🛵 ${driverName || "Repartidor"}
-            </div>
-            <div style="width: 28px; height: 28px; background: #2ed573; border: 2.5px solid #ffffff; border-radius: 50%; display: flex; align-items: center; justify-content: center; box-shadow: 0 4px 12px rgba(46,213,115,0.5); font-size: 13px;">
-              🏍️
-            </div>
-          </div>
-        `;
+      if (initDriverLat != null && initDriverLng != null && !isNaN(initDriverLat) && !isNaN(initDriverLng)) {
         const driverIcon = L.divIcon({
           className: "clean-driver-marker",
-          html: driverIconHtml,
+          html: createDriverMarkerHtml(driverName, isDriverView),
           iconSize: [0, 0],
         });
-        const driverMarker = L.marker([driverLat, driverLng], { icon: driverIcon }).addTo(map);
+        const driverMarker = L.marker([initDriverLat, initDriverLng], { icon: driverIcon, zIndexOffset: 1000 }).addTo(map);
+        driverMarker.bindPopup(`<b>🛵 ${isDriverView ? "Tu ubicación actual" : (driverName || "Repartidor en camino")}</b>`);
         driverMarkerRef.current = driverMarker;
       }
 
@@ -288,9 +444,12 @@ export const RouteMap: React.FC<RouteMapProps> = ({
       if (mapInstanceRef.current) {
         mapInstanceRef.current.remove();
         mapInstanceRef.current = null;
+        driverMarkerRef.current = null;
       }
     };
   }, [restL, restG, delivL, delivG]);
+
+  const hasLiveDriverLocation = !!(currentGps?.lat || (driverLat && driverLng));
 
   return (
     <div style={{
@@ -303,6 +462,14 @@ export const RouteMap: React.FC<RouteMapProps> = ({
       border: "1px solid var(--border-light, rgba(255,255,255,0.08))",
       boxShadow: "0 8px 24px rgba(0,0,0,0.18)"
     }}>
+      {/* CSS Pulse Style for Driver Radar */}
+      <style>{`
+        @keyframes leaflet-radar-pulse {
+          0% { transform: scale(0.9); opacity: 0.9; }
+          100% { transform: scale(1.85); opacity: 0; }
+        }
+      `}</style>
+
       {/* Map Window Container */}
       <div style={{ position: "relative", width: "100%", height }}>
         {/* Leaflet Canvas */}
@@ -316,26 +483,73 @@ export const RouteMap: React.FC<RouteMapProps> = ({
           zIndex: 1000,
           display: "flex",
           alignItems: "center",
-          gap: "6px",
-          background: "rgba(18, 22, 31, 0.9)",
+          gap: "8px",
+          background: "rgba(18, 22, 31, 0.92)",
           backdropFilter: "blur(8px)",
           color: "#ffffff",
           padding: "6px 12px",
           borderRadius: "30px",
-          border: "1px solid rgba(255,255,255,0.12)",
-          boxShadow: "0 4px 12px rgba(0,0,0,0.25)",
-          fontSize: "11.5px",
+          border: "1px solid rgba(255,255,255,0.14)",
+          boxShadow: "0 4px 12px rgba(0,0,0,0.3)",
+          fontSize: "12px",
           fontWeight: "700",
           pointerEvents: "none"
         }}>
           <span>🛵</span>
-          <span style={{ color: "#2ed573" }}>{distanceKm > 0 ? `${distanceKm} km` : "En ruta"}</span>
-          <span style={{ opacity: 0.5 }}>•</span>
+          <span style={{ color: "#2ed573" }}>
+            {distanceKm > 0 ? `${distanceKm} km` : "En ruta"}
+          </span>
+          <span style={{ opacity: 0.4 }}>•</span>
           <span>~{etaMinutes} min</span>
+
+          {hasLiveDriverLocation ? (
+            <span style={{
+              display: "inline-flex",
+              alignItems: "center",
+              gap: "4px",
+              fontSize: "10px",
+              color: "#2ed573",
+              background: "rgba(46, 213, 115, 0.15)",
+              padding: "2px 6px",
+              borderRadius: "10px",
+              border: "1px solid rgba(46, 213, 115, 0.3)"
+            }}>
+              <Radio size={10} className="animate-pulse" /> GPS en vivo
+            </span>
+          ) : (
+            <span style={{ fontSize: "10px", color: "var(--text-muted)", opacity: 0.8 }}>
+              Ruta estimada
+            </span>
+          )}
         </div>
 
-        {/* Floating Recenter Button (Top-Right) */}
-        <div style={{ position: "absolute", top: "10px", right: "10px", zIndex: 1000 }}>
+        {/* Floating Top-Right Controls */}
+        <div style={{ position: "absolute", top: "10px", right: "10px", zIndex: 1000, display: "flex", gap: "6px" }}>
+          {isDriverView && (
+            <button
+              type="button"
+              onClick={handleManualGpsRefresh}
+              title="Actualizar mi señal GPS"
+              style={{
+                width: "36px",
+                height: "36px",
+                borderRadius: "50%",
+                backgroundColor: gpsStatus === "ACTIVE" ? "rgba(46, 213, 115, 0.2)" : "rgba(18, 22, 31, 0.9)",
+                backdropFilter: "blur(8px)",
+                color: gpsStatus === "ACTIVE" ? "#2ed573" : "#ffffff",
+                border: "1px solid rgba(255,255,255,0.15)",
+                display: "flex",
+                alignItems: "center",
+                justifyContent: "center",
+                cursor: "pointer",
+                boxShadow: "0 4px 12px rgba(0,0,0,0.3)",
+                transition: "all 0.2s ease",
+              }}
+            >
+              <RefreshCw size={16} className={gpsStatus === "UPDATING" ? "animate-spin" : ""} />
+            </button>
+          )}
+
           <button
             type="button"
             onClick={handleRecenter}
@@ -361,7 +575,55 @@ export const RouteMap: React.FC<RouteMapProps> = ({
         </div>
       </div>
 
-      {/* Clean Bottom Action Strip with ONLY Google Maps & Waze */}
+      {/* Driver GPS Testing Bar (Only shown in driver view to test GPS advancement if on desktop) */}
+      {isDriverView && (
+        <div style={{
+          padding: "6px 14px",
+          backgroundColor: "rgba(46, 213, 115, 0.08)",
+          borderTop: "1px solid rgba(46, 213, 115, 0.2)",
+          display: "flex",
+          alignItems: "center",
+          justifyContent: "space-between",
+          fontSize: "11px",
+          color: "var(--text-secondary)"
+        }}>
+          <div style={{ display: "flex", alignItems: "center", gap: "6px" }}>
+            <span style={{
+              width: "8px",
+              height: "8px",
+              borderRadius: "50%",
+              backgroundColor: gpsStatus === "ACTIVE" ? "#2ed573" : gpsStatus === "ERROR" ? "#ff4757" : "#ffa502"
+            }}></span>
+            <span>
+              {gpsStatus === "ACTIVE"
+                ? `GPS Activo (${currentGps?.lat.toFixed(4)}, ${currentGps?.lng.toFixed(4)})`
+                : gpsStatus === "UPDATING"
+                ? "Buscando satélites GPS..."
+                : "Esperando permisos GPS del dispositivo"}
+            </span>
+          </div>
+
+          <button
+            type="button"
+            onClick={handleSimulateAdvance}
+            title="Simular avance hacia el cliente"
+            style={{
+              backgroundColor: "rgba(255, 255, 255, 0.08)",
+              border: "1px solid rgba(255, 255, 255, 0.15)",
+              color: "#ffffff",
+              padding: "3px 8px",
+              borderRadius: "6px",
+              cursor: "pointer",
+              fontSize: "10.5px",
+              fontWeight: "600"
+            }}
+          >
+            🧪 Probar Avance GPS (+20%)
+          </button>
+        </div>
+      )}
+
+      {/* Clean Bottom Action Strip with Google Maps & Waze Navigation */}
       <div style={{
         padding: "12px 16px",
         backgroundColor: "var(--bg-tertiary, #141722)",
@@ -385,12 +647,36 @@ export const RouteMap: React.FC<RouteMapProps> = ({
           </span>
         </div>
 
-        {/* ONLY Google Maps & Waze Buttons */}
-        <div style={{ display: "flex", alignItems: "center", gap: "8px", flexShrink: 0 }}>
+        {/* Navigation Action Buttons */}
+        <div style={{ display: "flex", alignItems: "center", gap: "8px", flexShrink: 0, flexWrap: "wrap" }}>
+          {isDriverView && (
+            <button
+              type="button"
+              onClick={() => openGoogleMapsNavigation("RESTAURANT")}
+              title="Ir al restaurante a recoger pedido"
+              style={{
+                display: "inline-flex",
+                alignItems: "center",
+                gap: "5px",
+                backgroundColor: "rgba(255, 159, 67, 0.15)",
+                color: "#ff9f43",
+                border: "1px solid rgba(255, 159, 67, 0.4)",
+                padding: "7px 12px",
+                borderRadius: "8px",
+                fontSize: "11px",
+                fontWeight: "700",
+                cursor: "pointer",
+                transition: "background 0.2s ease",
+              }}
+            >
+              <span>🏪 Ir al Local</span>
+            </button>
+          )}
+
           <button
             type="button"
-            onClick={openGoogleMapsNavigation}
-            title="Abrir ruta en Google Maps"
+            onClick={() => openGoogleMapsNavigation("CUSTOMER")}
+            title="Abrir destino en Google Maps"
             style={{
               display: "inline-flex",
               alignItems: "center",
@@ -398,7 +684,7 @@ export const RouteMap: React.FC<RouteMapProps> = ({
               backgroundColor: "#1a73e8",
               color: "#ffffff",
               border: "none",
-              padding: "8px 14px",
+              padding: "7px 14px",
               borderRadius: "8px",
               fontSize: "12px",
               fontWeight: "700",
@@ -413,7 +699,7 @@ export const RouteMap: React.FC<RouteMapProps> = ({
 
           <button
             type="button"
-            onClick={openWazeNavigation}
+            onClick={() => openWazeNavigation("CUSTOMER")}
             title="Abrir destino en Waze"
             style={{
               display: "inline-flex",
@@ -422,7 +708,7 @@ export const RouteMap: React.FC<RouteMapProps> = ({
               backgroundColor: "#00d2d3",
               color: "#000000",
               border: "none",
-              padding: "8px 14px",
+              padding: "7px 14px",
               borderRadius: "8px",
               fontSize: "12px",
               fontWeight: "800",

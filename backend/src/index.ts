@@ -33,6 +33,12 @@ io.on("connection", (socket) => {
     console.log(`[Socket] Client ${socket.id} joined room restaurant-${restaurantId}`);
   });
 
+  // Join a room for a specific order to track real-time delivery GPS
+  socket.on("join-order", (orderId: string | number) => {
+    socket.join(`order-${orderId}`);
+    console.log(`[Socket] Client ${socket.id} joined room order-${orderId}`);
+  });
+
   socket.on("disconnect", () => {
     console.log(`[Socket] Client disconnected: ${socket.id}`);
   });

@@ -368,6 +368,10 @@ export async function createPublicOrder(req: Request, res: Response, next: NextF
         const variantId = parseInt(item.variantId, 10);
         const quantity = parseFloat(item.quantity);
 
+        if (isNaN(quantity) || quantity <= 0) {
+          throw new Error("Item quantity must be a positive number greater than 0");
+        }
+
         const variant = await tx.menuItemVariant.findFirst({
           where: { id: variantId, menuItem: { category: { restaurantId: restaurant.id } } },
         });
