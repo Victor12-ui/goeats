@@ -5,6 +5,7 @@ import {
   Star,
   Heart,
   Search,
+  ChevronLeft,
   ChevronRight,
   Compass,
   Utensils,
@@ -150,6 +151,63 @@ export const Aggregator: React.FC = () => {
       document.removeEventListener("mousedown", handleClickOutside);
     };
   }, [userDropdownOpen]);
+
+  // Horizontal Slider Refs and Navigation State for Categories
+  const categoriesRef = useRef<HTMLDivElement>(null);
+  const [canScrollCategoriesLeft, setCanScrollCategoriesLeft] = useState(false);
+  const [canScrollCategoriesRight, setCanScrollCategoriesRight] = useState(true);
+
+  const checkCategoryScroll = () => {
+    const el = categoriesRef.current;
+    if (!el) return;
+    const { scrollLeft, scrollWidth, clientWidth } = el;
+    setCanScrollCategoriesLeft(scrollLeft > 10);
+    setCanScrollCategoriesRight(scrollLeft < scrollWidth - clientWidth - 10);
+  };
+
+  useEffect(() => {
+    checkCategoryScroll();
+    const el = categoriesRef.current;
+    if (el) {
+      el.addEventListener("scroll", checkCategoryScroll, { passive: true });
+      window.addEventListener("resize", checkCategoryScroll);
+      return () => {
+        el.removeEventListener("scroll", checkCategoryScroll);
+        window.removeEventListener("resize", checkCategoryScroll);
+      };
+    }
+  }, [activeCategoriesList]);
+
+  const scrollCategories = (direction: "left" | "right") => {
+    const el = categoriesRef.current;
+    if (!el) return;
+    const scrollAmount = Math.max(el.clientWidth * 0.65, 260);
+    el.scrollBy({
+      left: direction === "left" ? -scrollAmount : scrollAmount,
+      behavior: "smooth"
+    });
+  };
+
+  // Horizontal Slider Refs for Popular & Offers Carousels
+  const popularRef = useRef<HTMLDivElement>(null);
+  const scrollPopular = (direction: "left" | "right") => {
+    if (!popularRef.current) return;
+    const scrollAmount = Math.max(popularRef.current.clientWidth * 0.7, 340);
+    popularRef.current.scrollBy({
+      left: direction === "left" ? -scrollAmount : scrollAmount,
+      behavior: "smooth"
+    });
+  };
+
+  const offersRef = useRef<HTMLDivElement>(null);
+  const scrollOffers = (direction: "left" | "right") => {
+    if (!offersRef.current) return;
+    const scrollAmount = Math.max(offersRef.current.clientWidth * 0.7, 340);
+    offersRef.current.scrollBy({
+      left: direction === "left" ? -scrollAmount : scrollAmount,
+      behavior: "smooth"
+    });
+  };
 
   const getInitials = (name?: string) => {
     if (!name) return "U";
@@ -1214,56 +1272,160 @@ export const Aggregator: React.FC = () => {
       {/* Main Aggregator Body */}
       <div style={{ maxWidth: "1240px", margin: "0 auto", padding: "0 20px" }}>
 
-        {/* Categories Bar Horizontal Slider */}
-        <div className="no-scrollbar" style={{
-          display: "flex",
-          gap: "15px",
-          overflowX: "auto",
-          padding: "20px 0 15px 0",
-          margin: "10px 0",
-          scrollBehavior: "smooth"
-        }}>
-          {activeCategoriesList.map((cat) => (
-            <button
-              key={cat.id}
-              onClick={() => setActiveCategory(cat.id)}
-              style={{
-                display: "flex",
-                flexDirection: "column",
-                alignItems: "center",
-                gap: "8px",
-                flexShrink: 0,
-                cursor: "pointer",
-                background: "none",
-                border: "none",
-                transition: "transform 0.15s ease"
-              }}
-              onMouseEnter={(e) => e.currentTarget.style.transform = "scale(1.05)"}
-              onMouseLeave={(e) => e.currentTarget.style.transform = "scale(1)"}
-            >
-              <div style={{
-                width: "60px",
-                height: "60px",
-                borderRadius: "50%",
-                backgroundColor: activeCategory === cat.id ? "#ffeef0" : "#f1f3f4",
-                border: activeCategory === cat.id ? "2px solid #ff4757" : "2px solid transparent",
-                display: "flex",
-                alignItems: "center",
-                justifyContent: "center",
-                fontSize: "24px",
-                transition: "all 0.2s ease"
-              }}>
-                {cat.emoji}
-              </div>
-              <span style={{
-                fontSize: "11px",
-                fontWeight: activeCategory === cat.id ? "700" : "500",
-                color: activeCategory === cat.id ? "#ff4757" : "#202124"
-              }}>
-                {cat.name}
-              </span>
-            </button>
-          ))}
+        {/* Categories Bar Horizontal Slider with Navigation Arrows */}
+        <div style={{ position: "relative", margin: "10px 0" }}>
+          {/* Left Navigation Arrow */}
+          {canScrollCategoriesLeft && (
+            <div style={{
+              position: "absolute",
+              left: "-12px",
+              top: "50%",
+              transform: "translateY(-50%)",
+              zIndex: 10,
+              display: "flex",
+              alignItems: "center"
+            }}>
+              <button
+                type="button"
+                onClick={() => scrollCategories("left")}
+                aria-label="Ver categorías anteriores"
+                style={{
+                  width: "38px",
+                  height: "38px",
+                  borderRadius: "50%",
+                  backgroundColor: "#ffffff",
+                  border: "1px solid #e2e8f0",
+                  boxShadow: "0 4px 12px rgba(0,0,0,0.12)",
+                  display: "flex",
+                  alignItems: "center",
+                  justifyContent: "center",
+                  cursor: "pointer",
+                  color: "#1e293b",
+                  transition: "all 0.2s cubic-bezier(0.16, 1, 0.3, 1)"
+                }}
+                onMouseEnter={(e) => {
+                  e.currentTarget.style.transform = "scale(1.1)";
+                  e.currentTarget.style.boxShadow = "0 6px 16px rgba(0,0,0,0.18)";
+                  e.currentTarget.style.backgroundColor = "#f8fafc";
+                }}
+                onMouseLeave={(e) => {
+                  e.currentTarget.style.transform = "scale(1)";
+                  e.currentTarget.style.boxShadow = "0 4px 12px rgba(0,0,0,0.12)";
+                  e.currentTarget.style.backgroundColor = "#ffffff";
+                }}
+              >
+                <ChevronLeft size={20} strokeWidth={2.5} />
+              </button>
+            </div>
+          )}
+
+          {/* Categories Slider Container */}
+          <div
+            ref={categoriesRef}
+            className="no-scrollbar"
+            onWheel={(e) => {
+              if (e.deltaY !== 0 && categoriesRef.current) {
+                categoriesRef.current.scrollLeft += e.deltaY * 0.7;
+              }
+            }}
+            style={{
+              display: "flex",
+              gap: "16px",
+              overflowX: "auto",
+              padding: "16px 8px 12px 8px",
+              scrollBehavior: "smooth",
+              WebkitOverflowScrolling: "touch"
+            }}
+          >
+            {activeCategoriesList.map((cat) => (
+              <button
+                key={cat.id}
+                onClick={() => setActiveCategory(cat.id)}
+                style={{
+                  display: "flex",
+                  flexDirection: "column",
+                  alignItems: "center",
+                  gap: "8px",
+                  flexShrink: 0,
+                  cursor: "pointer",
+                  background: "none",
+                  border: "none",
+                  transition: "transform 0.15s ease",
+                  padding: "4px"
+                }}
+                onMouseEnter={(e) => e.currentTarget.style.transform = "scale(1.05)"}
+                onMouseLeave={(e) => e.currentTarget.style.transform = "scale(1)"}
+              >
+                <div style={{
+                  width: "60px",
+                  height: "60px",
+                  borderRadius: "50%",
+                  backgroundColor: activeCategory === cat.id ? "#ffeef0" : "#f1f3f4",
+                  border: activeCategory === cat.id ? "2px solid #ff4757" : "2px solid transparent",
+                  display: "flex",
+                  alignItems: "center",
+                  justifyContent: "center",
+                  fontSize: "24px",
+                  transition: "all 0.2s ease"
+                }}>
+                  {cat.emoji}
+                </div>
+                <span style={{
+                  fontSize: "11px",
+                  fontWeight: activeCategory === cat.id ? "700" : "500",
+                  color: activeCategory === cat.id ? "#ff4757" : "#202124",
+                  whiteSpace: "nowrap"
+                }}>
+                  {cat.name}
+                </span>
+              </button>
+            ))}
+          </div>
+
+          {/* Right Navigation Arrow */}
+          {canScrollCategoriesRight && (
+            <div style={{
+              position: "absolute",
+              right: "-12px",
+              top: "50%",
+              transform: "translateY(-50%)",
+              zIndex: 10,
+              display: "flex",
+              alignItems: "center"
+            }}>
+              <button
+                type="button"
+                onClick={() => scrollCategories("right")}
+                aria-label="Ver más categorías"
+                style={{
+                  width: "38px",
+                  height: "38px",
+                  borderRadius: "50%",
+                  backgroundColor: "#ffffff",
+                  border: "1px solid #e2e8f0",
+                  boxShadow: "0 4px 12px rgba(0,0,0,0.12)",
+                  display: "flex",
+                  alignItems: "center",
+                  justifyContent: "center",
+                  cursor: "pointer",
+                  color: "#1e293b",
+                  transition: "all 0.2s cubic-bezier(0.16, 1, 0.3, 1)"
+                }}
+                onMouseEnter={(e) => {
+                  e.currentTarget.style.transform = "scale(1.1)";
+                  e.currentTarget.style.boxShadow = "0 6px 16px rgba(0,0,0,0.18)";
+                  e.currentTarget.style.backgroundColor = "#f8fafc";
+                }}
+                onMouseLeave={(e) => {
+                  e.currentTarget.style.transform = "scale(1)";
+                  e.currentTarget.style.boxShadow = "0 4px 12px rgba(0,0,0,0.12)";
+                  e.currentTarget.style.backgroundColor = "#ffffff";
+                }}
+              >
+                <ChevronRight size={20} strokeWidth={2.5} />
+              </button>
+            </div>
+          )}
         </div>
 
         {/* Filter Pills / Chips Container */}
@@ -1731,19 +1893,68 @@ export const Aggregator: React.FC = () => {
                   <h2 style={{ fontSize: "22px", fontWeight: "800", color: "#202124", margin: 0 }}>
                     Favoritos nacionales
                   </h2>
-                  <div style={{ display: "flex", gap: "5px" }}>
+                  <div style={{ display: "flex", alignItems: "center", gap: "12px" }}>
                     <span style={{ fontSize: "12px", color: "#5f6368", fontWeight: "600", cursor: "pointer" }}>Ver todos</span>
-                    <ChevronRight size={16} style={{ color: "#5f6368" }} />
+                    <div style={{ display: "flex", gap: "6px" }}>
+                      <button
+                        type="button"
+                        onClick={() => scrollPopular("left")}
+                        aria-label="Anterior"
+                        style={{
+                          width: "32px",
+                          height: "32px",
+                          borderRadius: "50%",
+                          backgroundColor: "#f1f5f9",
+                          border: "none",
+                          display: "flex",
+                          alignItems: "center",
+                          justifyContent: "center",
+                          cursor: "pointer",
+                          color: "#334155",
+                          transition: "all 0.15s ease"
+                        }}
+                        onMouseEnter={(e) => e.currentTarget.style.backgroundColor = "#e2e8f0"}
+                        onMouseLeave={(e) => e.currentTarget.style.backgroundColor = "#f1f5f9"}
+                      >
+                        <ChevronLeft size={16} />
+                      </button>
+                      <button
+                        type="button"
+                        onClick={() => scrollPopular("right")}
+                        aria-label="Siguiente"
+                        style={{
+                          width: "32px",
+                          height: "32px",
+                          borderRadius: "50%",
+                          backgroundColor: "#f1f5f9",
+                          border: "none",
+                          display: "flex",
+                          alignItems: "center",
+                          justifyContent: "center",
+                          cursor: "pointer",
+                          color: "#334155",
+                          transition: "all 0.15s ease"
+                        }}
+                        onMouseEnter={(e) => e.currentTarget.style.backgroundColor = "#e2e8f0"}
+                        onMouseLeave={(e) => e.currentTarget.style.backgroundColor = "#f1f5f9"}
+                      >
+                        <ChevronRight size={16} />
+                      </button>
+                    </div>
                   </div>
                 </div>
 
-                <div className="no-scrollbar" style={{
-                  display: "flex",
-                  gap: "20px",
-                  overflowX: "auto",
-                  paddingBottom: "10px",
-                  scrollBehavior: "smooth"
-                }}>
+                <div
+                  ref={popularRef}
+                  className="no-scrollbar"
+                  style={{
+                    display: "flex",
+                    gap: "20px",
+                    overflowX: "auto",
+                    paddingBottom: "10px",
+                    scrollBehavior: "smooth"
+                  }}
+                >
                   {popularRestaurants.map((rest) => (
                     <Link
                       to={`/r/${rest.slug}`}
@@ -1895,19 +2106,68 @@ export const Aggregator: React.FC = () => {
                   <h2 style={{ fontSize: "22px", fontWeight: "800", color: "#202124", margin: 0 }}>
                     Las ofertas más populares
                   </h2>
-                  <div style={{ display: "flex", gap: "5px" }}>
+                  <div style={{ display: "flex", alignItems: "center", gap: "12px" }}>
                     <span style={{ fontSize: "12px", color: "#5f6368", fontWeight: "600", cursor: "pointer" }}>Ver todos</span>
-                    <ChevronRight size={16} style={{ color: "#5f6368" }} />
+                    <div style={{ display: "flex", gap: "6px" }}>
+                      <button
+                        type="button"
+                        onClick={() => scrollOffers("left")}
+                        aria-label="Anterior"
+                        style={{
+                          width: "32px",
+                          height: "32px",
+                          borderRadius: "50%",
+                          backgroundColor: "#f1f5f9",
+                          border: "none",
+                          display: "flex",
+                          alignItems: "center",
+                          justifyContent: "center",
+                          cursor: "pointer",
+                          color: "#334155",
+                          transition: "all 0.15s ease"
+                        }}
+                        onMouseEnter={(e) => e.currentTarget.style.backgroundColor = "#e2e8f0"}
+                        onMouseLeave={(e) => e.currentTarget.style.backgroundColor = "#f1f5f9"}
+                      >
+                        <ChevronLeft size={16} />
+                      </button>
+                      <button
+                        type="button"
+                        onClick={() => scrollOffers("right")}
+                        aria-label="Siguiente"
+                        style={{
+                          width: "32px",
+                          height: "32px",
+                          borderRadius: "50%",
+                          backgroundColor: "#f1f5f9",
+                          border: "none",
+                          display: "flex",
+                          alignItems: "center",
+                          justifyContent: "center",
+                          cursor: "pointer",
+                          color: "#334155",
+                          transition: "all 0.15s ease"
+                        }}
+                        onMouseEnter={(e) => e.currentTarget.style.backgroundColor = "#e2e8f0"}
+                        onMouseLeave={(e) => e.currentTarget.style.backgroundColor = "#f1f5f9"}
+                      >
+                        <ChevronRight size={16} />
+                      </button>
+                    </div>
                   </div>
                 </div>
 
-                <div className="no-scrollbar" style={{
-                  display: "flex",
-                  gap: "20px",
-                  overflowX: "auto",
-                  paddingBottom: "10px",
-                  scrollBehavior: "smooth"
-                }}>
+                <div
+                  ref={offersRef}
+                  className="no-scrollbar"
+                  style={{
+                    display: "flex",
+                    gap: "20px",
+                    overflowX: "auto",
+                    paddingBottom: "10px",
+                    scrollBehavior: "smooth"
+                  }}
+                >
                   {offerRestaurants.map((rest) => (
                     <Link
                       to={`/r/${rest.slug}`}
