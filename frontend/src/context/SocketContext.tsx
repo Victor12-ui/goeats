@@ -15,7 +15,7 @@ export const SocketProvider: React.FC<{ children: React.ReactNode }> = ({ childr
   const [isConnected, setIsConnected] = useState(false);
 
   useEffect(() => {
-    if (!isAuthenticated || !user?.restaurantId) {
+    if (!isAuthenticated) {
       if (socket) {
         socket.disconnect();
         setSocket(null);
@@ -37,22 +37,25 @@ export const SocketProvider: React.FC<{ children: React.ReactNode }> = ({ childr
       reconnectionDelay: 1000,
     });
 
-    const joinRestaurantRoom = () => {
+    const joinRooms = () => {
       if (user?.restaurantId) {
         newSocket.emit("join-restaurant", user.restaurantId.toString());
         console.log(`[Socket] Joined restaurant room: restaurant-${user.restaurantId}`);
+      }
+      if (user?.id) {
+        newSocket.emit("join-user", user.id.toString());
       }
     };
 
     newSocket.on("connect", () => {
       console.log("[Socket] Connected to server:", newSocket.id);
       setIsConnected(true);
-      joinRestaurantRoom();
+      joinRooms();
     });
 
     if (newSocket.connected) {
       setIsConnected(true);
-      joinRestaurantRoom();
+      joinRooms();
     }
 
     newSocket.on("disconnect", (reason) => {
@@ -65,7 +68,7 @@ export const SocketProvider: React.FC<{ children: React.ReactNode }> = ({ childr
     return () => {
       newSocket.disconnect();
     };
-  }, [isAuthenticated, user?.restaurantId]);
+  }, [isAuthenticated, user?.id, user?.restaurantId]);
 
   return (
     <SocketContext.Provider value={{ socket, isConnected }}>

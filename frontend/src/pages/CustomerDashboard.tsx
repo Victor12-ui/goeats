@@ -23,6 +23,7 @@ import { RouteMap } from "../components/RouteMap";
 import { FoodPreferencesModal } from "../components/FoodPreferencesModal";
 import { CustomerProfileView } from "../components/CustomerProfileView";
 import { SupportModal } from "../components/SupportModal";
+import { useSocket } from "../context/SocketContext";
 
 interface OrderItem {
   id: number;
@@ -107,6 +108,7 @@ export const CustomerDashboard: React.FC<CustomerDashboardProps> = ({ defaultTab
     setSearchParams({ tab });
   };
 
+  const { socket } = useSocket();
   const [orders, setOrders] = useState<Order[]>([]);
   const [stats, setStats] = useState<CustomerStats>({
     totalOrders: 0,
@@ -194,7 +196,7 @@ export const CustomerDashboard: React.FC<CustomerDashboardProps> = ({ defaultTab
     loadCustomerData();
   }, []);
 
-  // Poll active orders every 10 seconds to update status in tracking modal
+  // Poll active orders every 8 seconds to update status in tracking modal (fallback)
   useEffect(() => {
     const activeOrders = orders.some(o => 
       o.status !== "DELIVERED" && o.status !== "CANCELLED"
@@ -220,10 +222,58 @@ export const CustomerDashboard: React.FC<CustomerDashboardProps> = ({ defaultTab
       } catch (err) {
         console.error("Error polling order updates:", err);
       }
-    }, 10000);
+    }, 8000);
 
     return () => clearInterval(interval);
   }, [orders, trackingOrder]);
+
+  // Real-time WebSocket listener for live driver GPS location and order updates
+  useEffect(() => {
+    if (!socket || !isModalOpen || !trackingOrder?.id) return;
+
+    // Join the order room
+    socket.emit("join-order", trackingOrder.id);
+
+    const handleLocationUpdate = (data: { orderId: number; driverLat: number; driverLng: number }) => {
+      if (data.orderId === trackingOrder.id) {
+        setTrackingOrder((prev) =>
+          prev && prev.id === data.orderId
+            ? { ...prev, driverLat: data.driverLat, driverLng: data.driverLng }
+            : prev
+        );
+        setOrders((prev) =>
+          prev.map((o) =>
+            o.id === data.orderId
+              ? { ...o, driverLat: data.driverLat, driverLng: data.driverLng }
+              : o
+          )
+        );
+      }
+    };
+
+    const handleStatusUpdate = (data: any) => {
+      const orderId = data?.orderId || data?.order?.id || data?.id;
+      if (orderId === trackingOrder.id) {
+        apiRequest("/orders/customer/my-orders").then((res) => {
+          if (res.success && res.orders) {
+            setOrders(res.orders);
+            const fresh = res.orders.find((o: Order) => o.id === trackingOrder.id);
+            if (fresh) setTrackingOrder(fresh);
+          }
+        });
+      }
+    };
+
+    socket.on(`order-${trackingOrder.id}-location`, handleLocationUpdate);
+    socket.on("driver-location-updated", handleLocationUpdate);
+    socket.on("order-status-updated", handleStatusUpdate);
+
+    return () => {
+      socket.off(`order-${trackingOrder.id}-location`, handleLocationUpdate);
+      socket.off("driver-location-updated", handleLocationUpdate);
+      socket.off("order-status-updated", handleStatusUpdate);
+    };
+  }, [socket, isModalOpen, trackingOrder?.id]);
 
   useEffect(() => {
     if (isModalOpen || showPayphoneSimulator) {
@@ -1215,9 +1265,29 @@ export const CustomerDashboard: React.FC<CustomerDashboardProps> = ({ defaultTab
             {/* Live GPS Route Map */}
             {trackingOrder.type === "DELIVERY" && (
               <div style={{ marginTop: "16px", marginBottom: "12px" }}>
-                <label style={{ fontSize: "12px", fontWeight: "700", marginBottom: "6px", display: "block", color: "var(--text-primary)" }}>
-                  🗺️ Ruta y Ubicación en Tiempo Real
-                </label>
+                <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: "8px" }}>
+                  <label style={{ fontSize: "12.5px", fontWeight: "700", display: "flex", alignItems: "center", gap: "6px", color: "var(--text-primary)", margin: 0 }}>
+                    🗺️ Ruta y Ubicación en Tiempo Real
+                  </label>
+                  {trackingOrder.status === "DELIVERING" && (
+                    <span style={{
+                      display: "inline-flex",
+                      alignItems: "center",
+                      gap: "5px",
+                      fontSize: "11px",
+                      fontWeight: "700",
+                      color: "#2ed573",
+                      background: "rgba(46, 213, 115, 0.12)",
+                      padding: "3px 8px",
+                      borderRadius: "12px",
+                      border: "1px solid rgba(46, 213, 115, 0.3)"
+                    }}>
+                      <span style={{ width: "6px", height: "6px", borderRadius: "50%", background: "#2ed573", display: "inline-block" }}></span>
+                      {trackingOrder.driverLat ? "Repartidor en camino (GPS Activo)" : "Repartidor asignado"}
+                    </span>
+                  )}
+                </div>
+
                 <RouteMap
                   orderId={trackingOrder.id}
                   restaurantName={trackingOrder.restaurant.name}
@@ -1233,7 +1303,7 @@ export const CustomerDashboard: React.FC<CustomerDashboardProps> = ({ defaultTab
                   driverLng={trackingOrder.driverLng}
                   driverName={trackingOrder.deliveryDriver?.name}
                   status={trackingOrder.status}
-                  height="300px"
+                  height="340px"
                 />
               </div>
             )}

@@ -263,6 +263,8 @@ export const DeliveryDashboard: React.FC = () => {
   };
 
   const handleDriverLocationUpdate = async (orderId: number, lat: number, lng: number) => {
+    // Optimistically update active orders in local state for instantaneous UI feedback
+    setActiveOrders(prev => prev.map(o => o.id === orderId ? { ...o, driverLat: lat, driverLng: lng } : o));
     try {
       await apiRequest("/delivery/location", {
         method: "POST",

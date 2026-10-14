@@ -850,11 +850,30 @@ export async function updateDriverLocation(req: Request, res: Response, next: Ne
     const lat = parseFloat(latitude);
     const lng = parseFloat(longitude);
 
+    if (isNaN(lat) || isNaN(lng)) {
+      return res.status(400).json({ success: false, message: "Invalid latitude or longitude coordinates" });
+    }
+
     let updatedOrder = null;
-    if (orderId) {
-      const parsedId = parseInt(orderId, 10);
+    let targetOrderId = orderId ? parseInt(orderId, 10) : null;
+
+    // If orderId is not passed or not found, locate current active DELIVERING order for this driver
+    if ((!targetOrderId || isNaN(targetOrderId)) && userId) {
+      const activeOrder = await prisma.order.findFirst({
+        where: {
+          deliveryDriverId: userId,
+          status: "DELIVERING",
+        },
+        orderBy: { updatedAt: "desc" },
+      });
+      if (activeOrder) {
+        targetOrderId = activeOrder.id;
+      }
+    }
+
+    if (targetOrderId && !isNaN(targetOrderId)) {
       updatedOrder = await prisma.order.update({
-        where: { id: parsedId },
+        where: { id: targetOrderId },
         data: {
           driverLat: lat,
           driverLng: lng,
@@ -863,15 +882,28 @@ export async function updateDriverLocation(req: Request, res: Response, next: Ne
 
       const io = req.app.get("io");
       if (io) {
-        io.emit(`order-${parsedId}-location`, {
-          orderId: parsedId,
+        const payload = {
+          orderId: targetOrderId,
+          driverId: userId,
           driverLat: lat,
           driverLng: lng,
-        });
+          timestamp: new Date().toISOString(),
+        };
+
+        // Broadcast to order specific room and general events
+        io.to(`order-${targetOrderId}`).emit(`order-${targetOrderId}-location`, payload);
+        io.emit(`order-${targetOrderId}-location`, payload);
+        io.emit("driver-location-updated", payload);
       }
     }
 
-    return res.status(200).json({ success: true, driverLat: lat, driverLng: lng, order: updatedOrder });
+    return res.status(200).json({
+      success: true,
+      driverLat: lat,
+      driverLng: lng,
+      orderId: targetOrderId,
+      order: updatedOrder,
+    });
   } catch (error) {
     next(error);
   }
