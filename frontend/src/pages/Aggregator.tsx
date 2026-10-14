@@ -236,7 +236,7 @@ export const Aggregator: React.FC = () => {
         deliveryCost: index % 2 === 0 ? "Envío gratis" : "Costo de envío: $1.25",
         promoText: index % 3 === 0 ? "$5.00 de descuento en tu compra" : null,
         isPopular: index % 2 === 0,
-        isFavorite: index % 3 === 0
+        isFavorite: false
       };
     });
 
@@ -284,12 +284,36 @@ export const Aggregator: React.FC = () => {
     }
   }, [user]);
 
+  // Sync favorites with active user session
+  useEffect(() => {
+    if (isAuthenticated && user?.id) {
+      try {
+        const stored = localStorage.getItem(`goeats_favorites_${user.id}`);
+        if (stored) {
+          const parsed = JSON.parse(stored);
+          if (Array.isArray(parsed)) {
+            setFavorites(parsed);
+            return;
+          }
+        }
+      } catch (e) {}
+    }
+    setFavorites([]);
+  }, [isAuthenticated, user?.id]);
+
   const toggleFavorite = (id: number, e: React.MouseEvent) => {
     e.preventDefault();
     e.stopPropagation();
-    setFavorites(prev =>
-      prev.includes(id) ? prev.filter(fId => fId !== id) : [...prev, id]
-    );
+    if (!isAuthenticated) return;
+    setFavorites(prev => {
+      const next = prev.includes(id) ? prev.filter(fId => fId !== id) : [...prev, id];
+      if (user?.id) {
+        try {
+          localStorage.setItem(`goeats_favorites_${user.id}`, JSON.stringify(next));
+        } catch (e) {}
+      }
+      return next;
+    });
   };
 
   const matchesCategory = (rest: AugmentedRestaurant, selectedId: string) => {
@@ -1589,26 +1613,28 @@ export const Aggregator: React.FC = () => {
                             <Sparkles size={11} color="#fbbf24" /> Recomendado
                           </div>
 
-                          <button
-                            onClick={(e) => toggleFavorite(rest.id, e)}
-                            style={{
-                              position: "absolute",
-                              top: "12px",
-                              right: "12px",
-                              width: "32px",
-                              height: "32px",
-                              borderRadius: "50%",
-                              backgroundColor: "rgba(255, 255, 255, 0.9)",
-                              border: "none",
-                              display: "flex",
-                              alignItems: "center",
-                              justifyContent: "center",
-                              cursor: "pointer",
-                              color: favorites.includes(rest.id) ? "#ff4757" : "#5f6368"
-                            }}
-                          >
-                            <Heart size={16} fill={favorites.includes(rest.id) ? "#ff4757" : "none"} />
-                          </button>
+                          {isAuthenticated && (
+                            <button
+                              onClick={(e) => toggleFavorite(rest.id, e)}
+                              style={{
+                                position: "absolute",
+                                top: "12px",
+                                right: "12px",
+                                width: "32px",
+                                height: "32px",
+                                borderRadius: "50%",
+                                backgroundColor: "rgba(255, 255, 255, 0.9)",
+                                border: "none",
+                                display: "flex",
+                                alignItems: "center",
+                                justifyContent: "center",
+                                cursor: "pointer",
+                                color: favorites.includes(rest.id) ? "#ff4757" : "#5f6368"
+                              }}
+                            >
+                              <Heart size={16} fill={favorites.includes(rest.id) ? "#ff4757" : "none"} />
+                            </button>
+                          )}
                         </div>
 
                         <div>
@@ -1769,31 +1795,33 @@ export const Aggregator: React.FC = () => {
                         )}
 
                         {/* Heart Button */}
-                        <button
-                          onClick={(e) => toggleFavorite(rest.id, e)}
-                          style={{
-                            position: "absolute",
-                            top: "15px",
-                            right: "15px",
-                            width: "34px",
-                            height: "34px",
-                            borderRadius: "50%",
-                            backgroundColor: "rgba(255, 255, 255, 0.9)",
-                            display: "flex",
-                            alignItems: "center",
-                            justifyContent: "center",
-                            border: "none",
-                            cursor: "pointer",
-                            boxShadow: "0 2px 6px rgba(0,0,0,0.1)",
-                            transition: "transform 0.15s ease"
-                          }}
-                        >
-                          <Heart
-                            size={16}
-                            fill={favorites.includes(rest.id) || rest.isFavorite ? "#ff4757" : "none"}
-                            color={favorites.includes(rest.id) || rest.isFavorite ? "#ff4757" : "#5f6368"}
-                          />
-                        </button>
+                        {isAuthenticated && (
+                          <button
+                            onClick={(e) => toggleFavorite(rest.id, e)}
+                            style={{
+                              position: "absolute",
+                              top: "15px",
+                              right: "15px",
+                              width: "34px",
+                              height: "34px",
+                              borderRadius: "50%",
+                              backgroundColor: "rgba(255, 255, 255, 0.9)",
+                              display: "flex",
+                              alignItems: "center",
+                              justifyContent: "center",
+                              border: "none",
+                              cursor: "pointer",
+                              boxShadow: "0 2px 6px rgba(0,0,0,0.1)",
+                              transition: "transform 0.15s ease"
+                            }}
+                          >
+                            <Heart
+                              size={16}
+                              fill={favorites.includes(rest.id) ? "#ff4757" : "none"}
+                              color={favorites.includes(rest.id) ? "#ff4757" : "#5f6368"}
+                            />
+                          </button>
+                        )}
                       </div>
 
                       {/* Content block */}
@@ -1929,33 +1957,35 @@ export const Aggregator: React.FC = () => {
                         </div>
 
                         {/* Heart Button */}
-                        <button
-                          onClick={(e) => toggleFavorite(rest.id, e)}
-                          style={{
-                            position: "absolute",
-                            top: "15px",
-                            right: "15px",
-                            width: "34px",
-                            height: "34px",
-                            borderRadius: "50%",
-                            backgroundColor: "rgba(255, 255, 255, 0.9)",
-                            display: "flex",
-                            alignItems: "center",
-                            justifyContent: "center",
-                            border: "none",
-                            cursor: "pointer",
-                            boxShadow: "0 2px 6px rgba(0,0,0,0.1)",
-                            transition: "transform 0.15s ease"
-                          }}
-                          onMouseEnter={(e) => e.currentTarget.style.transform = "scale(1.08)"}
-                          onMouseLeave={(e) => e.currentTarget.style.transform = "scale(1)"}
-                        >
-                          <Heart
-                            size={16}
-                            fill={favorites.includes(rest.id) || rest.isFavorite ? "#ff4757" : "none"}
-                            color={favorites.includes(rest.id) || rest.isFavorite ? "#ff4757" : "#5f6368"}
-                          />
-                        </button>
+                        {isAuthenticated && (
+                          <button
+                            onClick={(e) => toggleFavorite(rest.id, e)}
+                            style={{
+                              position: "absolute",
+                              top: "15px",
+                              right: "15px",
+                              width: "34px",
+                              height: "34px",
+                              borderRadius: "50%",
+                              backgroundColor: "rgba(255, 255, 255, 0.9)",
+                              display: "flex",
+                              alignItems: "center",
+                              justifyContent: "center",
+                              border: "none",
+                              cursor: "pointer",
+                              boxShadow: "0 2px 6px rgba(0,0,0,0.1)",
+                              transition: "transform 0.15s ease"
+                            }}
+                            onMouseEnter={(e) => e.currentTarget.style.transform = "scale(1.08)"}
+                            onMouseLeave={(e) => e.currentTarget.style.transform = "scale(1)"}
+                          >
+                            <Heart
+                              size={16}
+                              fill={favorites.includes(rest.id) ? "#ff4757" : "none"}
+                              color={favorites.includes(rest.id) ? "#ff4757" : "#5f6368"}
+                            />
+                          </button>
+                        )}
                       </div>
 
                       {/* Content block */}
@@ -2076,30 +2106,32 @@ export const Aggregator: React.FC = () => {
                       )}
 
                       {/* Favorite Button */}
-                      <button
-                        onClick={(e) => toggleFavorite(rest.id, e)}
-                        style={{
-                          position: "absolute",
-                          top: "15px",
-                          right: "15px",
-                          width: "36px",
-                          height: "36px",
-                          borderRadius: "50%",
-                          backgroundColor: "rgba(255, 255, 255, 0.9)",
-                          display: "flex",
-                          alignItems: "center",
-                          justifyContent: "center",
-                          border: "none",
-                          cursor: "pointer",
-                          boxShadow: "0 2px 6px rgba(0,0,0,0.1)"
-                        }}
-                      >
-                        <Heart
-                          size={16}
-                          fill={favorites.includes(rest.id) || rest.isFavorite ? "#ff4757" : "none"}
-                          color={favorites.includes(rest.id) || rest.isFavorite ? "#ff4757" : "#5f6368"}
-                        />
-                      </button>
+                      {isAuthenticated && (
+                        <button
+                          onClick={(e) => toggleFavorite(rest.id, e)}
+                          style={{
+                            position: "absolute",
+                            top: "15px",
+                            right: "15px",
+                            width: "36px",
+                            height: "36px",
+                            borderRadius: "50%",
+                            backgroundColor: "rgba(255, 255, 255, 0.9)",
+                            display: "flex",
+                            alignItems: "center",
+                            justifyContent: "center",
+                            border: "none",
+                            cursor: "pointer",
+                            boxShadow: "0 2px 6px rgba(0,0,0,0.1)"
+                          }}
+                        >
+                          <Heart
+                            size={16}
+                            fill={favorites.includes(rest.id) ? "#ff4757" : "none"}
+                            color={favorites.includes(rest.id) ? "#ff4757" : "#5f6368"}
+                          />
+                        </button>
+                      )}
                     </div>
 
                     {/* Meta info card */}

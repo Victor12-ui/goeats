@@ -1,30 +1,13 @@
 export function getBaseApiUrl(): string {
   const envApiUrl = (import.meta as any).env?.VITE_API_URL;
-  if (typeof window !== "undefined" && window.location) {
-    const { hostname, protocol } = window.location;
-
-    // When accessed through LAN IP or domain from mobile phones or other devices
-    if (hostname && hostname !== "localhost" && hostname !== "127.0.0.1") {
-      if (envApiUrl) {
-        try {
-          const parsed = new URL(envApiUrl);
-          // If envApiUrl pointed to localhost, redirect it to current machine's host
-          if (parsed.hostname === "localhost" || parsed.hostname === "127.0.0.1") {
-            parsed.hostname = hostname;
-            return parsed.toString().replace(/\/$/, "");
-          }
-          return envApiUrl.replace(/\/$/, "");
-        } catch {
-          if (envApiUrl.startsWith("/")) {
-            return `${window.location.origin}${envApiUrl.replace(/\/$/, "")}`;
-          }
-        }
-      }
-      return `${protocol}//${hostname}:5000/api`;
-    }
+  // If explicitly configured with a remote external URL (e.g. production https://...), use it
+  if (envApiUrl && !envApiUrl.includes("localhost") && !envApiUrl.includes("127.0.0.1") && envApiUrl.startsWith("http")) {
+    return envApiUrl.replace(/\/$/, "");
   }
 
-  return envApiUrl ? envApiUrl.replace(/\/$/, "") : "http://localhost:5000/api";
+  // In local development (PC or mobile LAN via Vite proxy), use relative /api
+  // This avoids CORS, firewall port 5000 blocks, and mismatched IP issues
+  return "/api";
 }
 
 interface RequestOptions extends RequestInit {
@@ -60,7 +43,7 @@ export async function apiRequest(endpoint: string, options: RequestOptions = {})
   }
 
   const baseUrl = getBaseApiUrl();
-  let url = `${baseUrl}${endpoint}`;
+  let url = `${baseUrl}${endpoint.startsWith("/") ? endpoint : "/" + endpoint}`;
   if (options.params) {
     const searchParams = new URLSearchParams(options.params);
     url += `?${searchParams.toString()}`;

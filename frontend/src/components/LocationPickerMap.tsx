@@ -346,14 +346,36 @@ export const LocationPickerMap: React.FC<LocationPickerMapProps> = ({
     }
   };
 
-  // Detect browser GPS
-  const handleGetCurrentLocation = () => {
+  // Detect browser GPS with multi-stage fallback (High accuracy -> Low accuracy -> IP Geo -> smooth center)
+  const handleGetCurrentLocation = async () => {
+    setLocating(true);
+
+    const tryIpGeolocation = async () => {
+      try {
+        const res = await fetch("https://ipwho.is/");
+        const data = await res.json();
+        if (data && data.latitude && data.longitude) {
+          const lat = Number(data.latitude);
+          const lng = Number(data.longitude);
+          if (mapInstanceRef.current) {
+            mapInstanceRef.current.flyTo([lat, lng], 15, { animate: true });
+          }
+          updateLocation(lat, lng);
+          return true;
+        }
+      } catch (e) {
+        console.warn("IP Geolocation fallback failed:", e);
+      }
+      return false;
+    };
+
     if (!navigator.geolocation) {
-      alert("Tu navegador no soporta geolocalización GPS.");
+      await tryIpGeolocation();
+      setLocating(false);
       return;
     }
 
-    setLocating(true);
+    // Attempt 1: High accuracy
     navigator.geolocation.getCurrentPosition(
       (position) => {
         setLocating(false);
@@ -363,12 +385,35 @@ export const LocationPickerMap: React.FC<LocationPickerMapProps> = ({
         }
         updateLocation(latitude, longitude);
       },
-      (error) => {
-        setLocating(false);
-        console.warn("Geolocation error:", error);
-        alert("No pudimos obtener tu GPS exacto. Por favor mueve el pin en el mapa.");
+      (err1) => {
+        // Attempt 2: Low accuracy / Wi-Fi triangulation
+        navigator.geolocation.getCurrentPosition(
+          (pos2) => {
+            setLocating(false);
+            const { latitude, longitude } = pos2.coords;
+            if (mapInstanceRef.current) {
+              mapInstanceRef.current.flyTo([latitude, longitude], 16, { animate: true });
+            }
+            updateLocation(latitude, longitude);
+          },
+          async (err2) => {
+            console.warn("Native GPS unavailable, trying IP geolocation fallback:", err1, err2);
+            // Attempt 3: IP Geolocation (works on HTTP / local network IPs)
+            const ok = await tryIpGeolocation();
+            setLocating(false);
+            if (!ok) {
+              const fallbackLat = restaurantLat || initialLat || DEFAULT_LAT;
+              const fallbackLng = restaurantLng || initialLng || DEFAULT_LNG;
+              if (mapInstanceRef.current) {
+                mapInstanceRef.current.flyTo([fallbackLat, fallbackLng], 15, { animate: true });
+              }
+              updateLocation(fallbackLat, fallbackLng);
+            }
+          },
+          { enableHighAccuracy: false, timeout: 6000 }
+        );
       },
-      { enableHighAccuracy: true, timeout: 10000 }
+      { enableHighAccuracy: true, timeout: 6000 }
     );
   };
 
